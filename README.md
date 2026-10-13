@@ -10,6 +10,9 @@ python3 -m edm_ai.cli -c examples/demo/config.json ask -u kim  "한빛전자 MES
 python3 -m edm_ai.cli -c examples/demo/config.json ask -u park "한빛전자 MES 계약 금액과 납기 지연 이슈는?"   # 재무: 마진율·원가문서·청구까지
 python3 -m edm_ai.cli -c examples/demo/config.json serve --demo-login   # http://127.0.0.1:8080
 python3 -m unittest discover -s tests
+python3 -m edm_ai.cli -c examples/demo/config.json eval examples/demo/golden.json   # 정확도 + 권한 누출(0이어야 함) 평가
+EDM_AI_SECRET=<16자 이상> python3 -m edm_ai.cli -c cfg.json token -u kim            # 서명 토큰 (auth.mode=token)
+python3 -m edm_ai.cli -c cfg.json verify-audit                                      # 감사 로그 변조 검증
 ```
 같은 질문도 사용자(`kim` 영업 / `park` 재무 / `lee` 인사 / `choi` 외부)에 따라 **보이는 문서·행·컬럼이 달라집니다.**
 
@@ -25,6 +28,13 @@ python3 -m unittest discover -s tests
 
 구조와 보안 모델 상세: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## v0.2 추가 기능
+- **하이브리드 검색**: BM25 + 벡터 유사도를 RRF로 결합, 둘 다 권한 선필터. 벡터는 기본 해시 트라이그램(오타·띄어쓰기에 강함, 의미 검색 아님) → `"embedder": {"base_url","model"}` 설정 시 로컬 임베딩 서버(bge-m3 등)로 진짜 의미 검색. 임베딩은 DB에 캐시되고, 서버 장애 시 자동 폴백.
+- **문서 형식**: docx/xlsx/pptx/odt/ods/odp(표준 라이브러리), PDF(`pdftotext` 또는 `pypdf`가 있을 때). 손상·XXE·zip bomb 파일은 색인하지 않고 `skipped`로 보고.
+- **통제된 집계**: `structured.metrics`에 선언한 합계/평균/건수만 허용. 행 정책을 집계 *이전에* 적용하고, 가려진 컬럼이 하나라도 쓰이면 계산하지 않음. 범위는 질문에 명시된 엔티티.
+- **보안**: 개인정보(주민번호·전화·카드·이메일) 자동 마스킹(`pii.reveal_roles`만 원문), 문서 내 프롬프트 인젝션 줄 무력화(LLM 입력), HMAC 서명 토큰 인증, 사용자별 요청 제한, 해시 체인 감사 로그(변조 시 `verify-audit` 실패).
+- **평가**: 골든셋으로 recall·MRR·**권한 누출 건수**를 측정하는 `eval` 명령 (누출>0이면 종료코드 1 → CI에 연결).
+
 ## 기존 시스템 연결 방법
 1. `config.json` → `docs.root`에 EDM 파일 경로(또는 내보내기 폴더), `manifest.json`에 경로 패턴별 ACL(첫 규칙 우선, 미지정은 `default`).
 2. `structured.tables`에 허용할 테이블/컬럼, `link`(엔티티↔컬럼), `columns.*.roles/min_level`(마스킹), `row_policy`(행 정책) 선언. 시작 시 실제 스키마로 검증합니다.
@@ -33,8 +43,9 @@ python3 -m unittest discover -s tests
 5. `ingest`는 증분 수집입니다. 내용 또는 ACL이 바뀐 문서만 재처리하고 삭제된 문서는 제거합니다.
 
 ## 한계 (프로토타입)
-- 검색은 BM25 + 한글 bi-gram. 의미 검색(임베딩)은 `Index.search` 자리에 로컬 임베딩 모델로 교체/병행 가능.
+- 기본 검색은 어휘 기반(BM25 + 퍼지 벡터)입니다. 동의어·의미 검색은 임베딩 서버를 설정해야 합니다.
+- 인메모리 색인이라 수십만 청크 이상은 OpenSearch 등으로 교체가 필요합니다.
 - DB는 엔티티 키 기반 조회만 지원합니다(자유 SQL/Text-to-SQL 없음 — 의도된 안전 설계).
-- 인증은 SSO/프록시 헤더에 위임(`auth_header`). 프로덕션에서는 프록시 뒤에서만 노출하고 `--demo-login`을 쓰지 마세요.
+- `auth.mode=header`는 인증 프록시 뒤에서만 쓰세요(클라이언트 헤더를 신뢰). 직접 노출 시 `token` 모드. `--demo-login`은 데모 전용.
 - PDF/Office/도면(DWG) 변환기와 OCR은 `ingest.read_file`에 추가하는 구조입니다.
 - 문서 내 프롬프트 인젝션은 "증거=데이터" 프롬프트와 인용 검증으로 완화할 뿐 완전 차단은 아닙니다. 권한 경계는 LLM이 아니라 검색·게이트웨이 계층에서 강제합니다.

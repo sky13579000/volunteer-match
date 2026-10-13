@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
+from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import auth
 from .config import App
 
 PAGE = """<!doctype html><meta charset=utf-8><title>EDM-AI</title>
@@ -22,6 +26,12 @@ out.innerHTML='<pre>'+esc(j.answer||j.error)+'</pre>'+(j.evidence||[]).map(e=>'<
 
 
 def make_handler(app: App, demo_login: bool):
+    acfg = app.cfg.get("auth", {"mode": "header"})
+    secret = os.environ.get(acfg.get("secret_env", "EDM_AI_SECRET"), "")
+    if acfg["mode"] == "token" and len(secret) < 16:
+        raise SystemExit("token auth needs env EDM_AI_SECRET (>=16 chars)")
+    limit = int(app.cfg.get("rate_limit_per_min", 60))
+    hits: dict[str, deque] = defaultdict(deque)
     lock = threading.Lock()  # SQLite connections are shared across request threads; serialise DB access
 
     class H(BaseHTTPRequestHandler):
@@ -35,11 +45,21 @@ def make_handler(app: App, demo_login: bool):
             self.wfile.write(body)
 
         def _user(self):
-            # Production: put SSO / mTLS / LDAP proxy in front and trust only its header (set via config).
-            return app.users.get(self.headers.get(app.cfg.get("auth_header", "X-User-Id"), ""))
+            if acfg["mode"] == "token":
+                tok = self.headers.get("Authorization", "")
+                return app.users.get(auth.verify(secret, tok[7:]) or "") if tok.startswith("Bearer ") else None
+            # header mode: ONLY behind an authenticating proxy (SSO/mTLS) that strips client-supplied copies.
+            return app.users.get(self.headers.get(acfg.get("header", "X-User-Id"), ""))
+
+        def _limited(self, uid):
+            now, q = time.time(), hits[uid]
+            while q and q[0] < now - 60:
+                q.popleft()
+            q.append(now)
+            return len(q) > limit
 
         def do_GET(self):
-            if self.path == "/" and demo_login:
+            if self.path == "/" and demo_login and acfg["mode"] == "header":
                 opts = "".join(f"<option value={u.id}>{u.name} ({u.dept}/L{u.level})</option>" for u in app.users.values())
                 return self._send(200, PAGE % opts, "text/html")
             u = self._user()
@@ -51,7 +71,8 @@ def make_handler(app: App, demo_login: bool):
                 if "admin" not in u.roles:
                     return self._send(403, {"error": "forbidden"})
                 with lock:
-                    return self._send(200, app.store.audit_log())
+                    ok, bad = app.store.verify_audit()
+                    return self._send(200, {"chain_ok": ok, "first_bad_id": bad, "entries": app.store.audit_log()})
             self._send(404, {"error": "not found"})
 
         def do_POST(self):
@@ -60,6 +81,8 @@ def make_handler(app: App, demo_login: bool):
                 return self._send(401, {"error": "unauthenticated"})
             if self.path != "/api/ask":
                 return self._send(404, {"error": "not found"})
+            if self._limited(u.id):
+                return self._send(429, {"error": "rate limited"})
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 q = str(json.loads(self.rfile.read(min(n, 65536)))["question"]).strip()

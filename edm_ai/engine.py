@@ -5,10 +5,15 @@ from .gateway import SqlGateway
 from .index import Index
 from .llm import citations_valid
 from .models import Answer, Evidence, Principal
+from .safety import redact_pii, scrub_injection
 from .store import DocumentStore
 from .text import sentences, tokenize
 
 REFUSAL = "접근 가능한 자료에서 근거를 찾지 못했습니다. 질문을 구체화하거나 담당자에게 자료 접근 권한을 요청해 주세요."
+
+
+def _num(v) -> str:
+    return f"{int(v):,}" if float(v) == int(v) else f"{v:,.2f}"
 
 
 class Engine:
@@ -16,17 +21,37 @@ class Engine:
     -> numbered evidence -> cited answer (LLM optional, validated) -> audit record."""
 
     def __init__(self, store: DocumentStore, gateway: SqlGateway | None, extractor: EntityExtractor,
-                 llm=None, expand_top: int = 2):
+                 llm=None, expand_top: int = 2, embedder=None, pii_reveal_roles=()):
         self.store, self.gateway, self.extractor, self.llm = store, gateway, extractor, llm
-        self.expand_top = expand_top
+        self.expand_top, self.embedder = expand_top, embedder
+        self.pii_reveal_roles = frozenset(pii_reveal_roles)
         self.reload()
 
     def reload(self):
-        self.index = Index(*self.store.load())
+        docs, chunks = self.store.load()
+        dense = None
+        if self.embedder:
+            try:
+                cache = self.store.get_embeddings(self.embedder.model)
+                missing = [c for c in chunks if c.id not in cache]
+                if missing:
+                    vecs = self.embedder.embed([c.text for c in missing])
+                    self.store.put_embeddings(self.embedder.model, {c.id: v for c, v in zip(missing, vecs)})
+                    cache.update({c.id: v for c, v in zip(missing, vecs)})
+                dense = [cache[c.id] for c in chunks]
+            except Exception:
+                dense = None  # embedder down: fall back to fuzzy vectors rather than failing
+        self.index = Index(docs, chunks, dense)
 
     def ask(self, p: Principal, question: str, k: int = 5) -> Answer:
         q_ents = self.extractor.extract(question)
-        hits = self.index.search(p, question, q_ents, k=k)
+        qvec = None
+        if self.embedder and self.index.dense is not None:
+            try:
+                qvec = self.embedder.embed([question])[0]
+            except Exception:
+                qvec = None
+        hits = self.index.search(p, question, q_ents, k=k, qvec=qvec)
 
         # Hop: entities found in the best documents become structured-DB lookups.
         hop = set(q_ents)
@@ -42,11 +67,21 @@ class Engine:
         evidence: list[Evidence] = []
         for c, s in hits:
             doc = self.index.docs[c.doc_id]
-            evidence.append(Evidence(f"E{len(evidence) + 1}", "doc", doc.title, c.text, f"{doc.source}#{c.ord}", s))
+            text = c.text if self.pii_reveal_roles & p.roles else redact_pii(c.text)
+            evidence.append(Evidence(f"E{len(evidence) + 1}", "doc", doc.title, text, f"{doc.source}#{c.ord}", s))
         for r in rows:
             body = "; ".join(f"{r['labels'][c]}={v}" for c, v in r["values"].items())
             evidence.append(Evidence(f"E{len(evidence) + 1}", "row", r["title"], body,
                                      f"{r['table']}:{r['key']}", masked=r["masked"]))
+
+        if self.gateway:
+            for m in self.gateway.metrics_for(question):
+                agg = self.gateway.aggregate(p, m, q_ents)  # scope = what the user asked, not doc-hop guesses
+                if agg:
+                    grp = agg["group_by"]
+                    body = "; ".join((f"{r[grp]}: " if grp else "") + _num(r["v"]) + f" ({r['n']}건)"
+                                     for r in agg["rows"])
+                    evidence.append(Evidence(f"E{len(evidence) + 1}", "metric", agg["label"], body, f"metric:{agg['metric']}"))
 
         if not evidence:
             ans = Answer(REFUSAL, [], refused=True)
@@ -57,7 +92,7 @@ class Engine:
 
     def _compose(self, question: str, evidence: list[Evidence]) -> Answer:
         if self.llm:
-            block = "\n\n".join(f"[{e.id}] ({e.title}) {e.text}" for e in evidence)
+            block = "\n\n".join(f"[{e.id}] ({e.title}) {scrub_injection(e.text)[0]}" for e in evidence)
             try:
                 text = self.llm.complete(question, block)
                 if citations_valid(text, len(evidence)):
@@ -72,6 +107,9 @@ class Engine:
         qt = set(tokenize(question))
         lines = []
         for e in evidence:
+            if e.kind == "metric":
+                lines.append(f"- {e.title}: {e.text} [{e.id}]")
+                continue
             if e.kind == "row":
                 note = f" (권한 없음: {', '.join(e.masked)})" if e.masked else ""
                 lines.append(f"- [{e.title}] {e.text}{note} [{e.id}]")

@@ -1,0 +1,80 @@
+[
+  {
+    "user": "kim",
+    "question": "한빛전자 MES 지체상금 조항",
+    "expect": [
+      "contracts/한빛전자"
+    ],
+    "forbid": [
+      "hr/",
+      "finance/"
+    ]
+  },
+  {
+    "user": "park",
+    "question": "PRJ-2024 원가 마진 위험",
+    "expect": [
+      "finance/PRJ-2024"
+    ]
+  },
+  {
+    "user": "lee",
+    "question": "PRJ-2024 프로젝트 리더 성과 등급 보너스",
+    "expect": [
+      "hr/"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "성과 등급 보너스 지급 대상",
+    "forbid": [
+      "hr/"
+    ]
+  },
+  {
+    "user": "choi",
+    "question": "한빛전자 지체상금 계약",
+    "forbid": [
+      "contracts/",
+      "mail/",
+      "minutes/",
+      "finance/",
+      "hr/",
+      "contracts:",
+      "invoices:"
+    ]
+  },
+  {
+    "user": "choi",
+    "question": "대성정밀 도면 공차 검토",
+    "expect": [
+      "drawings/"
+    ]
+  },
+  {
+    "user": "jung",
+    "question": "PRJ-2031 누리건설 계약",
+    "expect": [
+      "contracts:CT-2031-003"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "PRJ-2031 누리건설 계약",
+    "forbid": [
+      "contracts:CT-2031-003"
+    ]
+  },
+  {
+    "user": "park",
+    "question": "PRJ-2024 미수 청구 합계",
+    "expect": [
+      "metric:unpaid_total"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "오늘 점심 메뉴 추천",
+    "refuse": true
+  }
+]

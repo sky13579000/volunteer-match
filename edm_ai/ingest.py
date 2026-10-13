@@ -4,6 +4,9 @@ import csv
 import fnmatch
 import io
 import json
+import subprocess
+import zipfile
+from xml.etree import ElementTree as ET
 from email import policy
 from email.parser import BytesParser
 from html.parser import HTMLParser
@@ -11,10 +14,11 @@ from pathlib import Path
 
 from .entities import EntityExtractor
 from .models import Acl
+from .parsers import OFFICE, Unsupported
 from .store import DocumentStore
 from .text import chunk_text
 
-SUPPORTED = {".md", ".txt", ".csv", ".eml", ".html", ".htm"}
+SUPPORTED = {".md", ".txt", ".csv", ".eml", ".html", ".htm"} | set(OFFICE)
 
 
 class _Strip(HTMLParser):
@@ -38,6 +42,8 @@ class _Strip(HTMLParser):
 def read_file(path: Path) -> tuple[str, str]:
     """Return (title, plain text). Open formats only; plug in OCR/PDF/Office converters here."""
     ext = path.suffix.lower()
+    if ext in OFFICE:
+        return path.stem, OFFICE[ext](path)
     if ext == ".eml":
         msg = BytesParser(policy=policy.default).parsebytes(path.read_bytes())
         body = msg.get_body(preferencelist=("plain", "html"))
@@ -62,7 +68,7 @@ def ingest_dir(root: Path, manifest_path: Path | None, store: DocumentStore, ext
     manifest = json.loads(manifest_path.read_text("utf-8")) if manifest_path and manifest_path.exists() else {}
     rules = manifest.get("rules", [])
     default = Acl.from_dict(manifest.get("default", {"roles": ["admin"], "level": 99}))
-    stats = {"added": 0, "unchanged": 0, "pruned": 0}
+    stats = {"added": 0, "unchanged": 0, "pruned": 0, "skipped": []}
     seen = set()
     for path in sorted(root.rglob("*")):
         if path.suffix.lower() not in SUPPORTED or not path.is_file():
@@ -70,7 +76,12 @@ def ingest_dir(root: Path, manifest_path: Path | None, store: DocumentStore, ext
         rel = path.relative_to(root).as_posix()
         seen.add(rel)
         acl = next((Acl.from_dict(r["acl"]) for r in rules if fnmatch.fnmatch(rel, r["glob"])), default)
-        title, text = read_file(path)
+        try:
+            title, text = read_file(path)
+        except (Unsupported, zipfile.BadZipFile, OSError, ET.ParseError, subprocess.SubprocessError) as e:
+            stats["skipped"].append(f"{rel}: {e}")  # never index half-parsed content
+            seen.discard(rel)
+            continue
         pieces = [(c, extractor.extract(f"{title}\n{c}")) for c in chunk_text(text)]
         stats["added" if store.upsert(rel, title, acl, pieces, text) else "unchanged"] += 1
     stats["pruned"] = store.prune(seen)

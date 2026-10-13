@@ -10,6 +10,7 @@ from .ingest import ingest_dir
 from .llm import OpenAICompatClient
 from .models import Principal
 from .store import DocumentStore
+from .vectors import OpenAICompatEmbedder
 
 
 class App:
@@ -21,14 +22,17 @@ class App:
         self.cfg = json.loads(cp.read_text("utf-8"))
         self.store = DocumentStore(str(self._p(self.cfg.get("store", "store.db"))))
         s = self.cfg.get("structured")
-        self.gateway = SqlGateway(str(self._p(s["path"])), s["tables"]) if s else None
+        self.gateway = SqlGateway(str(self._p(s["path"])), s["tables"], s.get("metrics")) if s else None
         ent = self.cfg.get("entities", {})
         dicts = {d["type"]: self.gateway.distinct(d["table"], d["column"]) for d in ent.get("dictionaries", [])} \
             if self.gateway else {}
         self.extractor = EntityExtractor(ent.get("patterns"), dicts)
         llm = self.cfg.get("llm")
+        emb = self.cfg.get("embedder")
         self.engine = Engine(self.store, self.gateway, self.extractor,
-                             OpenAICompatClient(**llm) if llm else None)
+                             OpenAICompatClient(**llm) if llm else None,
+                             embedder=OpenAICompatEmbedder(**emb) if emb else None,
+                             pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()))
         users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
         self.users = {u["id"]: Principal.from_dict(u) for u in users}
 

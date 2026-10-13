@@ -17,7 +17,9 @@ class SqlGateway:
     No free-form SQL from users or from an LLM ever reaches the database.
     Any DB-API driver works (sqlite3 shown; swap connect() for Oracle/PostgreSQL/Tibero on-prem)."""
 
-    def __init__(self, path: str, tables: list[dict]):
+    AGGS = {"sum": "SUM", "avg": "AVG", "count": "COUNT", "min": "MIN", "max": "MAX"}
+
+    def __init__(self, path: str, tables: list[dict], metrics: list[dict] | None = None):
         self.db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.tables = {}
@@ -27,6 +29,12 @@ class SqlGateway:
             if not wanted <= real:
                 raise ValueError(f"table {t['name']}: unknown columns {sorted(wanted - real)}")
             self.tables[t["name"]] = t
+        self.metrics = metrics or []
+        for m in self.metrics:
+            t = self.tables[m["table"]]
+            if m["agg"] not in self.AGGS or m["column"] not in t["columns"] or \
+                    (m.get("group_by") and m["group_by"] not in t["columns"]):
+                raise ValueError(f"bad metric {m.get('name')}")
 
     def link_types(self) -> set[str]:
         return {et for t in self.tables.values() for et in t.get("link", {})}
@@ -85,6 +93,39 @@ class SqlGateway:
                     if len(out) >= limit:
                         return out
         return out
+
+
+    def metrics_for(self, question: str) -> list[dict]:
+        return [m for m in self.metrics if any(k in question for k in m["keywords"])]
+
+    def aggregate(self, p: Principal, m: dict, entities) -> dict | None:
+        """Governed aggregate: only declared metrics; row policy applied BEFORE aggregation; every column
+        used (measure, group, filters) must be visible to the caller, otherwise nothing is computed."""
+        t = self.tables[m["table"]]
+        used = [m["column"]] + ([m["group_by"]] if m.get("group_by") else [])
+        by_type: dict[str, list[str]] = {}
+        for ent in sorted(entities):
+            et, _, v = ent.partition(":")
+            if t.get("link", {}).get(et):
+                by_type.setdefault(et, []).append(v)
+        used += [t["link"][et] for et in by_type]
+        if not all(self._col_visible(t["columns"][c], p) for c in used):
+            return None
+        clause, params = self._row_clause(t, p)
+        if clause is None:
+            return None
+        conds, args = [clause], dict(params)
+        for et, vals in by_type.items():
+            names = [f":__{et}{i}" for i in range(len(vals))]
+            conds.append(f"{_ident(t['link'][et])} IN ({', '.join(names)})")
+            args.update({n[1:]: v for n, v in zip(names, vals)})
+        g = _ident(m["group_by"]) + ", " if m.get("group_by") else ""
+        sql = (f"SELECT {g}{self.AGGS[m['agg']]}({_ident(m['column'])}) AS v, COUNT(*) AS n FROM {_ident(t['name'])} "
+               f"WHERE {' AND '.join(conds)}" + (f" GROUP BY {_ident(m['group_by'])}" if g else ""))
+        rows = [dict(r) for r in self.db.execute(sql, args)]
+        rows = [r for r in rows if r["n"]]
+        return {"metric": m["name"], "label": m.get("label", m["name"]), "rows": rows,
+                "group_by": m.get("group_by")} if rows else None
 
 
 def _ident(name: str) -> str:
