@@ -1,0 +1,27 @@
+{
+  "store": "workspace/store.db",
+  "users": "users.json",
+  "docs": {"root": "docs", "manifest": "docs/manifest.json"},
+  "entities": {
+    "patterns": {"project": "PRJ-\\d{4}", "contract": "CT-\\d{4}-\\d{3}"},
+    "dictionaries": [{"type": "customer", "table": "customers", "column": "name"}]
+  },
+  "structured": {
+    "path": "workspace/erp.db",
+    "tables": [
+      {"name": "customers", "title": "고객사", "key": "id", "link": {"customer": "name"},
+       "columns": {"id": {}, "name": {"label": "고객사"}, "industry": {"label": "업종"},
+                   "credit_grade": {"label": "신용등급", "roles": ["finance"]}}},
+      {"name": "contracts", "title": "계약", "key": "id", "link": {"project": "project_code", "contract": "id", "customer": "customer_name"},
+       "columns": {"id": {"label": "계약번호"}, "project_code": {"label": "프로젝트"}, "customer_name": {"label": "고객사"},
+                   "amount": {"label": "계약금액(원)", "min_level": 2}, "margin_rate": {"label": "마진율", "roles": ["finance"]},
+                   "due_date": {"label": "납기"}},
+       "row_policy": [{"roles": ["finance"]}, {"where": "owner_dept = :dept"}]},
+      {"name": "invoices", "title": "청구", "key": "id", "link": {"project": "project_code"},
+       "columns": {"id": {"label": "청구번호"}, "project_code": {"label": "프로젝트"}, "amount": {"label": "청구금액(원)"},
+                   "status": {"label": "상태"}},
+       "row_policy": [{"roles": ["finance"]}]}
+    ]
+  },
+  "llm": null
+}

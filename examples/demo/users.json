@@ -1,0 +1,8 @@
+[
+  {"id": "kim",   "name": "김영업", "dept": "sales",      "roles": [],          "level": 2},
+  {"id": "park",  "name": "박재무", "dept": "finance",    "roles": ["finance"], "level": 3},
+  {"id": "lee",   "name": "이인사", "dept": "hr",         "roles": ["hr"],      "level": 3},
+  {"id": "jung",  "name": "정컨설", "dept": "consulting", "roles": [],          "level": 2},
+  {"id": "choi",  "name": "최협력(외부)", "dept": "external", "roles": [],      "level": 1},
+  {"id": "admin", "name": "관리자", "dept": "it",         "roles": ["admin"],   "level": 99}
+]

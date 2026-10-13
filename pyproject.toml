@@ -1,0 +1,12 @@
+[project]
+name = "edm-ai"
+version = "0.1.0"
+description = "EDM-to-AI knowledge platform: permission-aware, evidence-grounded retrieval over documents and structured DBs (on-prem / air-gapped friendly, zero dependencies)"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+edm-ai = "edm_ai.cli:main"
+
+[tool.setuptools]
+packages = ["edm_ai"]
