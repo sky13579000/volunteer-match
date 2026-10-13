@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .engine import Engine
 from .entities import EntityExtractor
+from .dbdrivers import connect
 from .gateway import SqlGateway
 from .ingest import ingest_dir
 from .llm import OpenAICompatClient
@@ -22,7 +23,7 @@ class App:
         self.cfg = json.loads(cp.read_text("utf-8"))
         self.store = DocumentStore(str(self._p(self.cfg.get("store", "store.db"))))
         s = self.cfg.get("structured")
-        self.gateway = SqlGateway(str(self._p(s["path"])), s["tables"], s.get("metrics")) if s else None
+        self.gateway = SqlGateway(connect(s, str(self.base)), s["tables"], s.get("metrics")) if s else None
         ent = self.cfg.get("entities", {})
         dicts = {d["type"]: self.gateway.distinct(d["table"], d["column"]) for d in ent.get("dictionaries", [])} \
             if self.gateway else {}

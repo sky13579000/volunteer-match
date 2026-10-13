@@ -106,7 +106,7 @@ class DemoCase(unittest.TestCase):
 
     def test_gateway_is_read_only(self):
         with self.assertRaises(sqlite3.OperationalError):
-            self.app.gateway.db.execute("DELETE FROM contracts")
+            self.app.gateway.db.query("DELETE FROM contracts")
 
     def test_audit_written_without_content(self):
         self.ask("kim", "한빛전자 계약")

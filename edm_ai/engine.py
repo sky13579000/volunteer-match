@@ -79,7 +79,7 @@ class Engine:
                 agg = self.gateway.aggregate(p, m, q_ents)  # scope = what the user asked, not doc-hop guesses
                 if agg:
                     grp = agg["group_by"]
-                    body = "; ".join((f"{r[grp]}: " if grp else "") + _num(r["v"]) + f" ({r['n']}건)"
+                    body = "; ".join((f"{r['g']}: " if grp else "") + _num(r["v"]) + f" ({r['n']}건)"
                                      for r in agg["rows"])
                     evidence.append(Evidence(f"E{len(evidence) + 1}", "metric", agg["label"], body, f"metric:{agg['metric']}"))
 

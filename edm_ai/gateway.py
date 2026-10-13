@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
-
+from .dbdrivers import Conn, SQLite
 from .models import Principal
 
 MASK = "●●●"
@@ -19,12 +18,11 @@ class SqlGateway:
 
     AGGS = {"sum": "SUM", "avg": "AVG", "count": "COUNT", "min": "MIN", "max": "MAX"}
 
-    def __init__(self, path: str, tables: list[dict], metrics: list[dict] | None = None):
-        self.db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
-        self.db.row_factory = sqlite3.Row
+    def __init__(self, conn: Conn | str, tables: list[dict], metrics: list[dict] | None = None):
+        self.db = SQLite(conn) if isinstance(conn, str) else conn   # str = sqlite path (backwards compatible)
         self.tables = {}
         for t in tables:
-            real = {r["name"] for r in self.db.execute(f"PRAGMA table_info({_ident(t['name'])})")}
+            real = self.db.columns(t["name"])
             wanted = set(t["columns"]) | set(t.get("link", {}).values()) | {t["key"]}
             if not wanted <= real:
                 raise ValueError(f"table {t['name']}: unknown columns {sorted(wanted - real)}")
@@ -41,7 +39,8 @@ class SqlGateway:
 
     def distinct(self, table: str, column: str) -> list[str]:
         assert table in self.tables and column in self.tables[table]["columns"]
-        return [r[0] for r in self.db.execute(f"SELECT DISTINCT {_ident(column)} FROM {_ident(table)}") if r[0]]
+        rows = self.db.query(f'SELECT DISTINCT {_ident(column)} AS "v" FROM {_ident(table)}')
+        return [r["v"] for r in rows if r["v"]]
 
     @staticmethod
     def _col_visible(spec: dict, p: Principal) -> bool:
@@ -75,8 +74,8 @@ class SqlGateway:
                     continue
                 cols = list(t["columns"])
                 sql = (f"SELECT {', '.join(_ident(c) for c in cols)} FROM {_ident(t['name'])} "
-                       f"WHERE {_ident(col)} = :__v AND {clause} LIMIT :__n")
-                for r in self.db.execute(sql, {**params, "__v": value, "__n": limit}):
+                       f"WHERE {_ident(col)} = :v__ AND {clause} {self.db.limit(limit)}")
+                for r in self.db.query(sql, {**params, "v__": value}):
                     if (t["name"], r[t["key"]]) in seen:
                         continue  # same row reached through several entity links
                     seen.add((t["name"], r[t["key"]]))
@@ -116,13 +115,13 @@ class SqlGateway:
             return None
         conds, args = [clause], dict(params)
         for et, vals in by_type.items():
-            names = [f":__{et}{i}" for i in range(len(vals))]
+            names = [f":f_{et}_{i}" for i in range(len(vals))]
             conds.append(f"{_ident(t['link'][et])} IN ({', '.join(names)})")
             args.update({n[1:]: v for n, v in zip(names, vals)})
-        g = _ident(m["group_by"]) + ", " if m.get("group_by") else ""
-        sql = (f"SELECT {g}{self.AGGS[m['agg']]}({_ident(m['column'])}) AS v, COUNT(*) AS n FROM {_ident(t['name'])} "
-               f"WHERE {' AND '.join(conds)}" + (f" GROUP BY {_ident(m['group_by'])}" if g else ""))
-        rows = [dict(r) for r in self.db.execute(sql, args)]
+        g = _ident(m["group_by"]) + ' AS "g", ' if m.get("group_by") else ""
+        sql = (f"SELECT {g}{self.AGGS[m['agg']]}({_ident(m['column'])}) AS \"v\", COUNT(*) AS \"n\" "
+               f"FROM {_ident(t['name'])} WHERE {' AND '.join(conds)}" + (f" GROUP BY {_ident(m['group_by'])}" if g else ""))
+        rows = self.db.query(sql, args)
         rows = [r for r in rows if r["n"]]
         return {"metric": m["name"], "label": m.get("label", m["name"]), "rows": rows,
                 "group_by": m.get("group_by")} if rows else None
