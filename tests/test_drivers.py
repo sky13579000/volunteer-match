@@ -82,3 +82,49 @@ class PostgresIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ORA = os.environ.get("ERP_ORA_DSN") and os.environ.get("ERP_ORA_USER")
+
+
+@unittest.skipUnless(ORA, "set ERP_ORA_DSN/ERP_ORA_USER/ERP_ORA_PASSWORD (seed with deploy/oracle/seed.sql) to run Oracle tests")
+class OracleIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from edm_ai.config import App
+        cls.tmp = tempfile.TemporaryDirectory()
+        cfg = json.loads((DEMO / "config.oracle.json").read_text("utf-8"))
+        cfg.update(store="s.db", users=str(DEMO / "users.json"))
+        cfg["docs"] = {"root": str(DEMO / "docs"), "manifest": str(DEMO / "docs" / "manifest.json")}
+        (Path(cls.tmp.name) / "c.json").write_text(json.dumps(cfg), "utf-8")
+        cls.app = App(str(Path(cls.tmp.name) / "c.json"))
+        cls.app.ingest()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_golden_set_identical_to_other_databases(self):
+        from edm_ai.evaluate import run_eval
+        r = run_eval(self.app, DEMO / "golden.json")
+        self.assertEqual((r["leaks"], r["failures"]), (0, []))
+
+    def test_session_is_read_only_even_for_the_schema_owner(self):
+        with self.assertRaises(Exception) as cm:
+            self.app.gateway.db.query("DELETE FROM CONTRACTS")
+        self.assertRegex(str(cm.exception), "ORA-01456|read-only|only SELECT")
+        self.assertEqual(self.app.gateway.db.query('SELECT COUNT(*) AS "n" FROM CONTRACTS')[0]["n"], 3)
+
+    def test_reserved_word_bind_and_unused_params(self):
+        # row policies bind :dept; :level is an Oracle reserved word and :uid is unused in the SQL
+        rows = self.app.gateway.lookup(self.app.users["kim"], {"project:PRJ-2024"})
+        self.assertEqual([r["key"] for r in rows], ["CT-2024-001"])
+        self.assertIn("margin_rate".upper(), rows[0]["masked"])
+
+    def test_aggregate_with_group_by(self):
+        e = next(x for x in self.app.engine.ask(self.app.users["park"], "고객사별 계약금액 합계").evidence
+                 if x.ref == "metric:contract_by_customer")
+        self.assertIn("한빛전자: 480,000,000", e.text)
+
+    def test_row_policy_blocks_other_departments(self):
+        self.assertEqual(self.app.gateway.lookup(self.app.users["kim"], {"project:PRJ-2031"}), [])

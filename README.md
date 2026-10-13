@@ -34,8 +34,8 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 | PostgreSQL 16 실서버 | ✅ 통합 테스트 + 골든셋(재현율 1.0, 누출 0). `EDM_TEST_PG_DSN` 설정 시 실행 |
 | 브라우저 UI (Chromium) | ✅ 로그인/질의/근거/거절/감사/XSS 시나리오 |
 | Docker 이미지·compose 스택 | ✅ 빌드·기동·PostgreSQL 연동·권한별 응답 확인 |
-| **Oracle 드라이버** | ⚠️ 문법/인용 규칙 단위 테스트만. 실제 Oracle 서버로는 **미검증** |
-| 임베딩/LLM 서버 연동 | ⚠️ 스텁으로만 검증(실제 vLLM/Ollama 미검증) |
+| Oracle Free 23ai 실서버 | ✅ 통합 테스트 5건 + 골든셋(SQLite·PostgreSQL과 동일 결과). `ERP_ORA_*` 설정 시 실행 |
+| LLM/임베딩 HTTP 통신 | ✅ OpenAI 호환 스텁 서버로 요청 형식·인증·인용 검증·타임아웃 폴백 검증. **실제 모델(vLLM/Ollama)로는 미검증** |
 
 ## 핵심 설계
 | 세미나 주제 | 구현 |
@@ -67,7 +67,8 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 - 기본 검색은 어휘 기반(BM25 + 퍼지 벡터)입니다. 동의어·의미 검색은 임베딩 서버를 설정해야 합니다.
 - 인메모리 색인이라 수십만 청크 이상은 OpenSearch 등으로 교체가 필요합니다.
 - DB는 엔티티 키 기반 조회와 선언된 집계만 지원합니다(자유 SQL/Text-to-SQL 없음 — 의도된 안전 설계).
-- Oracle은 따옴표 식별자(대소문자 구분)를 쓰므로 설정의 테이블/컬럼명을 저장된 그대로(보통 대문자) 적어야 합니다.
+- Oracle은 따옴표 식별자(대소문자 구분)를 쓰므로 설정의 테이블/컬럼명을 저장된 그대로(보통 대문자) 적어야 합니다(`examples/demo/config.oracle.json`, `deploy/oracle/seed.sql` 참고). 서버 측 읽기 전용은 `SET TRANSACTION READ ONLY`로 강제됩니다.
+- 관련도 관문(`retrieval.min_coverage`, 기본 0.2): 질문 토큰의 20% 미만만 겹치는 문서는 근거로 쓰지 않습니다. 코퍼스에 맞춰 `eval`로 조정하세요.
 - `auth.mode=header`는 인증 프록시 뒤에서만 쓰세요(클라이언트 헤더를 신뢰). 직접 노출 시 `token` 모드. `--demo-login`은 데모 전용.
 - PDF/Office/도면(DWG) 변환기와 OCR은 `ingest.read_file`에 추가하는 구조입니다.
 - 문서 내 프롬프트 인젝션은 "증거=데이터" 프롬프트와 인용 검증으로 완화할 뿐 완전 차단은 아닙니다. 권한 경계는 LLM이 아니라 검색·게이트웨이 계층에서 강제합니다.

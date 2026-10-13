@@ -13,16 +13,16 @@ def run_eval(app, golden_path: Path) -> dict:
     failures = []
     for c in cases:
         ans = app.engine.ask(app.users[c["user"]], c["question"])
-        refs = [e.ref for e in ans.evidence]
+        refs = [e.ref.lower() for e in ans.evidence]   # table-name case differs per DB (Oracle: UPPER)
         for f in c.get("forbid", []):
-            if any(r.startswith(f) for r in refs):
+            if any(r.startswith(f.lower()) for r in refs):
                 leaks += 1
                 failures.append(f"LEAK {c['user']}: {c['question']} -> {f}")
         if c.get("refuse") and not ans.refused:
             failures.append(f"should refuse: {c['question']}")
         for e in c.get("expect", []):
             total += 1
-            pos = next((i for i, r in enumerate(refs) if r.startswith(e)), None)
+            pos = next((i for i, r in enumerate(refs) if r.startswith(e.lower())), None)
             hit += pos is not None
             rr.append(1 / (pos + 1) if pos is not None else 0.0)
             if pos is None:

@@ -90,10 +90,22 @@ class Oracle(Conn):
         self.db.call_timeout = 15000
 
     def query(self, sql, params=None):
+        # Verified against Oracle Free: oracledb rejects bind names absent from the SQL (DPY-4008) and
+        # reserved words such as LEVEL are illegal bind names. Bind only what the SQL uses, under a safe prefix.
+        params = params or {}
+        used = set(_NAMED.findall(sql))
+        ora_sql = _NAMED.sub(lambda m: f":b_{m.group(1)}", sql)
+        ora_params = {f"b_{k}": v for k, v in params.items() if k in used}
         with self._lock, self.db.cursor() as cur:
-            cur.execute(sql, params or {})
-            names = [d[0] for d in cur.description]
-            return [dict(zip(names, row)) for row in cur.fetchall()]
+            try:
+                cur.execute("SET TRANSACTION READ ONLY")   # server-side: any DML fails with ORA-01456
+                cur.execute(ora_sql, ora_params)
+                if cur.description is None:                 # not a query: never hand back a result for DML/DDL
+                    raise RuntimeError("only SELECT statements are allowed")
+                names = [d[0] for d in cur.description]
+                return [dict(zip(names, row)) for row in cur.fetchall()]
+            finally:
+                self.db.rollback()                          # ends the read-only transaction
 
     def columns(self, table):
         return {r["COLUMN_NAME"] for r in self.query(

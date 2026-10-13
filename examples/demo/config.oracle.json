@@ -1,0 +1,181 @@
+{
+  "store": "workspace/store-ora.db",
+  "users": "users.json",
+  "docs": {
+    "root": "docs",
+    "manifest": "docs/manifest.json"
+  },
+  "entities": {
+    "patterns": {
+      "project": "PRJ-\\d{4}",
+      "contract": "CT-\\d{4}-\\d{3}"
+    },
+    "dictionaries": [
+      {
+        "type": "customer",
+        "table": "CUSTOMERS",
+        "column": "NAME"
+      }
+    ]
+  },
+  "structured": {
+    "tables": [
+      {
+        "name": "CUSTOMERS",
+        "title": "고객사",
+        "key": "ID",
+        "link": {
+          "customer": "NAME"
+        },
+        "columns": {
+          "ID": {},
+          "NAME": {
+            "label": "고객사"
+          },
+          "INDUSTRY": {
+            "label": "업종"
+          },
+          "CREDIT_GRADE": {
+            "label": "신용등급",
+            "roles": [
+              "finance"
+            ]
+          }
+        }
+      },
+      {
+        "name": "CONTRACTS",
+        "title": "계약",
+        "key": "ID",
+        "link": {
+          "project": "PROJECT_CODE",
+          "contract": "ID",
+          "customer": "CUSTOMER_NAME"
+        },
+        "columns": {
+          "ID": {
+            "label": "계약번호"
+          },
+          "PROJECT_CODE": {
+            "label": "프로젝트"
+          },
+          "CUSTOMER_NAME": {
+            "label": "고객사"
+          },
+          "AMOUNT": {
+            "label": "계약금액(원)",
+            "min_level": 2
+          },
+          "MARGIN_RATE": {
+            "label": "마진율",
+            "roles": [
+              "finance"
+            ]
+          },
+          "DUE_DATE": {
+            "label": "납기"
+          }
+        },
+        "row_policy": [
+          {
+            "roles": [
+              "finance"
+            ]
+          },
+          {
+            "where": "OWNER_DEPT = :dept"
+          }
+        ]
+      },
+      {
+        "name": "INVOICES",
+        "title": "청구",
+        "key": "ID",
+        "link": {
+          "project": "PROJECT_CODE"
+        },
+        "columns": {
+          "ID": {
+            "label": "청구번호"
+          },
+          "PROJECT_CODE": {
+            "label": "프로젝트"
+          },
+          "AMOUNT": {
+            "label": "청구금액(원)"
+          },
+          "STATUS": {
+            "label": "상태"
+          }
+        },
+        "row_policy": [
+          {
+            "roles": [
+              "finance"
+            ]
+          }
+        ]
+      }
+    ],
+    "metrics": [
+      {
+        "name": "contract_total",
+        "label": "계약금액 합계",
+        "table": "CONTRACTS",
+        "agg": "sum",
+        "column": "AMOUNT",
+        "keywords": [
+          "합계",
+          "총액",
+          "총 계약",
+          "합산",
+          "총 금액"
+        ]
+      },
+      {
+        "name": "contract_by_customer",
+        "label": "고객사별 계약금액",
+        "table": "CONTRACTS",
+        "agg": "sum",
+        "column": "AMOUNT",
+        "group_by": "CUSTOMER_NAME",
+        "keywords": [
+          "고객사별",
+          "거래처별"
+        ]
+      },
+      {
+        "name": "unpaid_total",
+        "label": "청구 건수/금액",
+        "table": "INVOICES",
+        "agg": "sum",
+        "column": "AMOUNT",
+        "group_by": "STATUS",
+        "keywords": [
+          "미수",
+          "수금"
+        ]
+      }
+    ],
+    "driver": "oracle",
+    "dsn_env": "ERP_ORA_DSN",
+    "user_env": "ERP_ORA_USER",
+    "password_env": "ERP_ORA_PASSWORD"
+  },
+  "llm": null,
+  "pii": {
+    "reveal_roles": [
+      "hr"
+    ]
+  },
+  "auth": {
+    "mode": "header"
+  },
+  "examples": [
+    "한빛전자 MES 계약 금액과 납기 지연 이슈는?",
+    "지체상금 조항이 있는 계약과 청구 현황",
+    "고객사별 계약금액 합계",
+    "PRJ-2024 미수 청구 합계",
+    "김영업 성과 등급과 보너스"
+  ]
+}
