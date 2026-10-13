@@ -76,5 +76,37 @@
     "user": "kim",
     "question": "오늘 점심 메뉴 추천",
     "refuse": true
+  },
+  {
+    "user": "choi",
+    "question": "한빛전자 MES 계약 금액과 PRJ-2024 원가 마진 이슈는?",
+    "forbid": [
+      "drawings/"
+    ]
+  },
+  {
+    "user": "choi",
+    "question": "회사 연차 휴가 규정이 뭐야",
+    "forbid": [
+      "drawings/"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "한빛전자 MES 계약 금액과 PRJ-2024 원가 마진 이슈는?",
+    "expect": [
+      "contracts/한빛전자",
+      "minutes/"
+    ],
+    "forbid": [
+      "drawings/"
+    ]
+  },
+  {
+    "user": "park",
+    "question": "지체 상금 한빛 전자 조항",
+    "expect": [
+      "contracts/한빛전자"
+    ]
   }
 ]

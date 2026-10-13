@@ -37,7 +37,8 @@ class App:
         self.engine = Engine(self.store, self.gateway, self.extractor,
                              OpenAICompatClient(**llm) if llm else None,
                              embedder=OpenAICompatEmbedder(**emb) if emb else None,
-                             pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()))
+                             pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()),
+                             min_coverage=self.cfg.get("retrieval", {}).get("min_coverage", 0.2))
         users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
         self.users = {u["id"]: Principal.from_dict(u) for u in users}
 

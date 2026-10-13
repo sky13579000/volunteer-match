@@ -20,15 +20,17 @@ class Index:
     involve chunks the caller may read, so forbidden documents cannot influence ranking or leak via scores."""
 
     def __init__(self, docs: dict[int, Document], chunks: list[Chunk], dense: list[list[float]] | None = None,
-                 fuzzy_min: float = 0.30, dense_min: float = 0.55):
+                 fuzzy_min: float = 0.35, dense_min: float = 0.55, min_coverage: float = 0.2):
         self.docs, self.chunks, self.dense = docs, chunks, dense
-        self.fuzzy_min, self.dense_min = fuzzy_min, dense_min
+        self.fuzzy_min, self.dense_min, self.min_coverage = fuzzy_min, dense_min, min_coverage
+        self.token_sets: list[frozenset] = []
         self.postings: dict[str, dict[int, int]] = defaultdict(dict)
         self.lengths: list[int] = []
         self.by_entity: dict[str, set[int]] = defaultdict(set)
         self.fuzzy = [fuzzy_vec(c.text) for c in chunks]
         for i, c in enumerate(chunks):
             toks = tokenize(c.text)
+            self.token_sets.append(frozenset(toks))
             self.lengths.append(len(toks) or 1)
             for t in toks:
                 self.postings[t][i] = self.postings[t].get(i, 0) + 1
@@ -71,8 +73,14 @@ class Index:
             qv = fuzzy_vec(query)
             sims = {i: cosine(qv, self.fuzzy[i]) for i in allowed}
             vmin = self.fuzzy_min
+        # Relevance gate. A relative cut-off alone can never reject the best of a poor candidate set (e.g. a user
+        # who may read a single unrelated document), so lexical candidates must also cover enough of the question.
+        qt = set(tokenize(query))
         top_bm = max(bm.values(), default=0.0)
-        cand = {i for i, s in bm.items() if s >= top_bm * rel_cutoff} | {i for i, s in sims.items() if s >= vmin}
+        entity_hit = {i for e in entities for i in self.by_entity.get(e, ()) if i in allowed}
+        cand = {i for i, s in bm.items() if s >= top_bm * rel_cutoff and
+                (i in entity_hit or (qt and len(qt & self.token_sets[i]) / len(qt) >= self.min_coverage))}
+        cand |= {i for i, s in sims.items() if s >= vmin}
         if not cand:
             return []
         fused: dict[int, float] = defaultdict(float)
