@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EDM-AI 지식 플랫폼</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <h1>EDM-AI</h1>
+  <span id="who"></span>
+  <nav>
+    <button id="tab-chat" class="tab on">질의응답</button>
+    <button id="tab-audit" class="tab" hidden>감사 로그</button>
+    <button id="logout" hidden>로그아웃</button>
+  </nav>
+</header>
+
+<main id="login" hidden>
+  <h2>로그인</h2>
+  <div id="login-demo" hidden>
+    <label>데모 사용자 <select id="demo-user"></select></label>
+    <p class="hint">데모 전용 화면입니다. 운영에서는 토큰/SSO 모드를 사용하세요.</p>
+  </div>
+  <div id="login-token" hidden>
+    <label>액세스 토큰 <input id="token" type="password" autocomplete="off" placeholder="edm-ai token -u 사용자 로 발급"></label>
+  </div>
+  <button id="login-go" class="primary">시작</button>
+  <p id="login-err" class="err"></p>
+</main>
+
+<main id="chat" hidden>
+  <div id="log" aria-live="polite"></div>
+  <div id="examples"></div>
+  <form id="form">
+    <textarea id="q" rows="2" placeholder="질문을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)" required></textarea>
+    <button class="primary" id="send">질문</button>
+  </form>
+</main>
+
+<main id="audit" hidden>
+  <p id="chain"></p>
+  <table><thead><tr><th>시각</th><th>사용자</th><th>질문</th><th>근거</th><th>결과</th></tr></thead><tbody id="audit-rows"></tbody></table>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

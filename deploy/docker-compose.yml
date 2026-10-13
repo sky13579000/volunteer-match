@@ -1,0 +1,48 @@
+# Demo stack:  docker compose -f deploy/docker-compose.yml up --build
+# Open http://localhost:8080  (demo login). Everything stays on this host: no external calls.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-admin-change-me}
+      POSTGRES_DB: erp
+    volumes:
+      - ./postgres/seed.sql:/docker-entrypoint-initdb.d/10-seed.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d erp"]
+      interval: 5s
+      retries: 10
+
+  edm-ai:
+    build:
+      context: ..
+      args: {EXTRAS: "postgres,pdf"}
+      secrets: [ca]          # optional private CA for pip behind a TLS-inspecting proxy: CA_BUNDLE=/path/ca.pem
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      EDM_AI_STORE: /data/store.db
+      ERP_DSN: host=postgres dbname=erp user=edm_ro password=change-me-edm-ro   # SELECT-only role from seed.sql
+    ports: ["127.0.0.1:8080:8080"]          # loopback only; put an authenticating proxy in front for real use
+    volumes:
+      - ./config:/config:ro
+      - ../examples/demo/docs:/srv/corpus:ro          # your EDM export / file share goes here
+      - ../examples/demo/users.json:/srv/users/users.json:ro
+      - edmdata:/data
+    command: ["-c", "/config/config.json", "serve", "--host", "0.0.0.0", "--port", "8080", "--demo-login", "--ingest", "--reindex-every", "300"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # Optional fully-local LLM + embeddings (air-gapped): docker compose --profile llm up
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    volumes: ["ollama:/root/.ollama"]
+
+secrets:
+  ca: {file: "${CA_BUNDLE:-/dev/null}"}
+
+volumes: {pgdata: {}, edmdata: {}, ollama: {}}

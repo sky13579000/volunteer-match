@@ -1,0 +1,179 @@
+{
+  "store": "/data/store.db",
+  "users": "/srv/users/users.json",
+  "docs": {
+    "root": "/srv/corpus",
+    "manifest": "/srv/corpus/manifest.json"
+  },
+  "entities": {
+    "patterns": {
+      "project": "PRJ-\\d{4}",
+      "contract": "CT-\\d{4}-\\d{3}"
+    },
+    "dictionaries": [
+      {
+        "type": "customer",
+        "table": "customers",
+        "column": "name"
+      }
+    ]
+  },
+  "structured": {
+    "tables": [
+      {
+        "name": "customers",
+        "title": "고객사",
+        "key": "id",
+        "link": {
+          "customer": "name"
+        },
+        "columns": {
+          "id": {},
+          "name": {
+            "label": "고객사"
+          },
+          "industry": {
+            "label": "업종"
+          },
+          "credit_grade": {
+            "label": "신용등급",
+            "roles": [
+              "finance"
+            ]
+          }
+        }
+      },
+      {
+        "name": "contracts",
+        "title": "계약",
+        "key": "id",
+        "link": {
+          "project": "project_code",
+          "contract": "id",
+          "customer": "customer_name"
+        },
+        "columns": {
+          "id": {
+            "label": "계약번호"
+          },
+          "project_code": {
+            "label": "프로젝트"
+          },
+          "customer_name": {
+            "label": "고객사"
+          },
+          "amount": {
+            "label": "계약금액(원)",
+            "min_level": 2
+          },
+          "margin_rate": {
+            "label": "마진율",
+            "roles": [
+              "finance"
+            ]
+          },
+          "due_date": {
+            "label": "납기"
+          }
+        },
+        "row_policy": [
+          {
+            "roles": [
+              "finance"
+            ]
+          },
+          {
+            "where": "owner_dept = :dept"
+          }
+        ]
+      },
+      {
+        "name": "invoices",
+        "title": "청구",
+        "key": "id",
+        "link": {
+          "project": "project_code"
+        },
+        "columns": {
+          "id": {
+            "label": "청구번호"
+          },
+          "project_code": {
+            "label": "프로젝트"
+          },
+          "amount": {
+            "label": "청구금액(원)"
+          },
+          "status": {
+            "label": "상태"
+          }
+        },
+        "row_policy": [
+          {
+            "roles": [
+              "finance"
+            ]
+          }
+        ]
+      }
+    ],
+    "metrics": [
+      {
+        "name": "contract_total",
+        "label": "계약금액 합계",
+        "table": "contracts",
+        "agg": "sum",
+        "column": "amount",
+        "keywords": [
+          "합계",
+          "총액",
+          "총 계약",
+          "합산",
+          "총 금액"
+        ]
+      },
+      {
+        "name": "contract_by_customer",
+        "label": "고객사별 계약금액",
+        "table": "contracts",
+        "agg": "sum",
+        "column": "amount",
+        "group_by": "customer_name",
+        "keywords": [
+          "고객사별",
+          "거래처별"
+        ]
+      },
+      {
+        "name": "unpaid_total",
+        "label": "청구 건수/금액",
+        "table": "invoices",
+        "agg": "sum",
+        "column": "amount",
+        "group_by": "status",
+        "keywords": [
+          "미수",
+          "수금"
+        ]
+      }
+    ],
+    "driver": "postgres",
+    "dsn_env": "ERP_DSN"
+  },
+  "llm": null,
+  "pii": {
+    "reveal_roles": [
+      "hr"
+    ]
+  },
+  "auth": {
+    "mode": "header"
+  },
+  "examples": [
+    "한빛전자 MES 계약 금액과 납기 지연 이슈는?",
+    "지체상금 조항이 있는 계약과 청구 현황",
+    "고객사별 계약금액 합계",
+    "PRJ-2024 미수 청구 합계",
+    "김영업 성과 등급과 보너스"
+  ]
+}

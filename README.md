@@ -16,6 +16,27 @@ python3 -m edm_ai.cli -c cfg.json verify-audit                                  
 ```
 같은 질문도 사용자(`kim` 영업 / `park` 재무 / `lee` 인사 / `choi` 외부)에 따라 **보이는 문서·행·컬럼이 달라집니다.**
 
+## 운영 배포
+```bash
+# 1) 전체 스택 (PostgreSQL + EDM-AI + 웹 UI), http://localhost:8080
+cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_BUNDLE=/path/ca.pem docker compose up -d --build
+# 2) 컨테이너 없이 (폐쇄망): 휠 반입 후  pip install --no-index --find-links wheels "edm-ai[postgres,pdf]"  →  deploy/edm-ai.service
+```
+- 컨테이너는 비루트, 읽기 전용 루트FS, 모든 capability 제거로 실행됩니다. 포트는 `127.0.0.1`에만 바인딩 — 실제 운영에서는 인증 프록시 또는 `auth.mode=token` 뒤에 두세요(`--demo-login` 제거).
+- DB 연결: `structured.driver` = `sqlite` | `postgres` | `oracle`. 접속 정보는 **환경변수**(`dsn_env` 등)로만 주입합니다. `deploy/postgres/seed.sql`에 SELECT 전용 계정(`edm_ro`) 예시가 있습니다. 서버 세션도 읽기 전용으로 강제하므로 2중 방어입니다.
+- `serve --ingest --reindex-every 300`: 기동 시 + 5분마다 증분 수집(변경·삭제·ACL 변경 반영).
+- 웹 UI(`/`): 사용자별 질의응답, `[E#]` 인용 칩 → 근거 카드, 문서/DB/집계 구분, 마스킹 컬럼 표시, 관리자 감사 로그 탭. 엄격한 CSP, 모든 데이터는 `textContent`로만 렌더링.
+
+## 검증 현황
+| 항목 | 상태 |
+|---|---|
+| 단위·통합 테스트 | `python3 -m unittest discover -s tests` |
+| PostgreSQL 16 실서버 | ✅ 통합 테스트 + 골든셋(재현율 1.0, 누출 0). `EDM_TEST_PG_DSN` 설정 시 실행 |
+| 브라우저 UI (Chromium) | ✅ 로그인/질의/근거/거절/감사/XSS 시나리오 |
+| Docker 이미지·compose 스택 | ✅ 빌드·기동·PostgreSQL 연동·권한별 응답 확인 |
+| **Oracle 드라이버** | ⚠️ 문법/인용 규칙 단위 테스트만. 실제 Oracle 서버로는 **미검증** |
+| 임베딩/LLM 서버 연동 | ⚠️ 스텁으로만 검증(실제 vLLM/Ollama 미검증) |
+
 ## 핵심 설계
 | 세미나 주제 | 구현 |
 |---|---|
@@ -45,7 +66,8 @@ python3 -m edm_ai.cli -c cfg.json verify-audit                                  
 ## 한계 (프로토타입)
 - 기본 검색은 어휘 기반(BM25 + 퍼지 벡터)입니다. 동의어·의미 검색은 임베딩 서버를 설정해야 합니다.
 - 인메모리 색인이라 수십만 청크 이상은 OpenSearch 등으로 교체가 필요합니다.
-- DB는 엔티티 키 기반 조회만 지원합니다(자유 SQL/Text-to-SQL 없음 — 의도된 안전 설계).
+- DB는 엔티티 키 기반 조회와 선언된 집계만 지원합니다(자유 SQL/Text-to-SQL 없음 — 의도된 안전 설계).
+- Oracle은 따옴표 식별자(대소문자 구분)를 쓰므로 설정의 테이블/컬럼명을 저장된 그대로(보통 대문자) 적어야 합니다.
 - `auth.mode=header`는 인증 프록시 뒤에서만 쓰세요(클라이언트 헤더를 신뢰). 직접 노출 시 `token` 모드. `--demo-login`은 데모 전용.
 - PDF/Office/도면(DWG) 변환기와 OCR은 `ingest.read_file`에 추가하는 구조입니다.
 - 문서 내 프롬프트 인젝션은 "증거=데이터" 프롬프트와 인용 검증으로 완화할 뿐 완전 차단은 아닙니다. 권한 경계는 LLM이 아니라 검색·게이트웨이 계층에서 강제합니다.

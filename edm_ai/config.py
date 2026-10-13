@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from pathlib import Path
 
 from .engine import Engine
@@ -20,8 +22,10 @@ class App:
     def __init__(self, config_path: str):
         cp = Path(config_path).resolve()
         self.base = cp.parent
+        self.lock = threading.Lock()  # serialises the shared DB connections (requests, re-indexing)
         self.cfg = json.loads(cp.read_text("utf-8"))
-        self.store = DocumentStore(str(self._p(self.cfg.get("store", "store.db"))))
+        store_path = os.environ.get("EDM_AI_STORE") or str(self._p(self.cfg.get("store", "store.db")))  # env wins: containers
+        self.store = DocumentStore(store_path)
         s = self.cfg.get("structured")
         self.gateway = SqlGateway(connect(s, str(self.base)), s["tables"], s.get("metrics")) if s else None
         ent = self.cfg.get("entities", {})
@@ -42,7 +46,9 @@ class App:
 
     def ingest(self) -> dict:
         d = self.cfg["docs"]
-        stats = ingest_dir(self._p(d["root"]), self._p(d["manifest"]) if d.get("manifest") else None,
-                           self.store, self.extractor)
-        self.engine.reload()
+        with self.lock:
+            stats = ingest_dir(self._p(d["root"]), self._p(d["manifest"]) if d.get("manifest") else None,
+                               self.store, self.extractor)
+            if stats["added"] or stats["pruned"]:
+                self.engine.reload()   # swaps the index only when something changed
         return stats

@@ -1,28 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import auth
 from .config import App
 
-PAGE = """<!doctype html><meta charset=utf-8><title>EDM-AI</title>
-<style>body{font:15px system-ui;max-width:820px;margin:2rem auto;padding:0 1rem}textarea{width:100%%;height:4rem}
-pre{white-space:pre-wrap;background:#f5f5f5;padding:.8rem;border-radius:6px}.e{border-left:3px solid #888;padding-left:.6rem;margin:.6rem 0}
-small{color:#666}</style>
-<h2>EDM-AI 지식 플랫폼 (데모)</h2>
-<label>사용자 <select id=u>%s</select></label>
-<textarea id=q placeholder="예: 한빛전자 MES 계약 금액과 납기 이슈를 알려줘"></textarea>
-<button onclick=ask()>질문</button><div id=out></div>
-<script>
-async function ask(){const r=await fetch('/api/ask',{method:'POST',headers:{'X-User-Id':u.value},body:JSON.stringify({question:q.value})});
-const j=await r.json();const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-out.innerHTML='<pre>'+esc(j.answer||j.error)+'</pre>'+(j.evidence||[]).map(e=>'<div class=e><b>['+e.id+'] '+esc(e.title)+'</b> <small>'+esc(e.ref)+'</small><br>'+esc(e.text)+'</div>').join('')}
-</script>"""
+log = logging.getLogger("edm_ai")
+STATIC = Path(__file__).parent / "static"
+FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/app.css": ("app.css", "text/css")}
+CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 
 
 def make_handler(app: App, demo_login: bool):
@@ -32,7 +25,7 @@ def make_handler(app: App, demo_login: bool):
         raise SystemExit("token auth needs env EDM_AI_SECRET (>=16 chars)")
     limit = int(app.cfg.get("rate_limit_per_min", 60))
     hits: dict[str, deque] = defaultdict(deque)
-    lock = threading.Lock()  # SQLite connections are shared across request threads; serialise DB access
+    lock = app.lock  # DB connections are shared across request threads and the re-indexer
 
     class H(BaseHTTPRequestHandler):
         def _send(self, code, obj, ctype="application/json"):
@@ -41,6 +34,9 @@ def make_handler(app: App, demo_login: bool):
             self.send_header("Content-Type", f"{ctype}; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", CSP)
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
@@ -59,14 +55,41 @@ def make_handler(app: App, demo_login: bool):
             return len(q) > limit
 
         def do_GET(self):
-            if self.path == "/" and demo_login and acfg["mode"] == "header":
-                opts = "".join(f"<option value={u.id}>{u.name} ({u.dept}/L{u.level})</option>" for u in app.users.values())
-                return self._send(200, PAGE % opts, "text/html")
+            self._safe(self._get)
+
+        def do_POST(self):
+            self._safe(self._post)
+
+        def _safe(self, fn):
+            try:
+                fn()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception:  # never drop the connection or leak internals
+                log.exception("request failed: %s %s", self.command, self.path)
+                try:
+                    self._send(500, {"error": "internal error"})
+                except Exception:
+                    pass
+
+        def _get(self):
+            if self.path in FILES:
+                name, ctype = FILES[self.path]
+                return self._send(200, (STATIC / name).read_text("utf-8"), ctype)
+            if self.path == "/api/config":
+                return self._send(200, {"auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
+                                        "examples": app.cfg.get("examples", [])})
+            if self.path == "/api/demo-users":
+                if not (demo_login and acfg["mode"] == "header"):
+                    return self._send(404, {"error": "not found"})
+                return self._send(200, [{"id": x.id, "name": x.name, "dept": x.dept, "level": x.level} for x in app.users.values()])
             u = self._user()
             if self.path == "/api/health":
                 return self._send(200, {"ok": True})
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
+            if self.path == "/api/me":
+                return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles})
             if self.path == "/api/audit":
                 if "admin" not in u.roles:
                     return self._send(403, {"error": "forbidden"})
@@ -75,7 +98,7 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(200, {"chain_ok": ok, "first_bad_id": bad, "entries": app.store.audit_log()})
             self._send(404, {"error": "not found"})
 
-        def do_POST(self):
+        def _post(self):
             u = self._user()
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
@@ -99,5 +122,21 @@ def make_handler(app: App, demo_login: bool):
     return H
 
 
-def serve(app: App, host="127.0.0.1", port=8080, demo_login=False):
+def _reindex_loop(app: App, every: int):
+    while True:
+        time.sleep(every)
+        try:
+            st = app.ingest()
+            if st["added"] or st["pruned"] or st["skipped"]:
+                log.info("reindex: %s", st)
+        except Exception:
+            log.exception("reindex failed (serving previous index)")
+
+
+def serve(app: App, host="127.0.0.1", port=8080, demo_login=False, ingest=False, reindex_every=0):
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if ingest:
+        log.info("startup ingest: %s", app.ingest())
+    if reindex_every:
+        threading.Thread(target=_reindex_loop, args=(app, reindex_every), daemon=True).start()
     ThreadingHTTPServer((host, port), make_handler(app, demo_login)).serve_forever()

@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 
 from .models import Acl, Chunk, Document
 
+# Bump whenever chunking / parsing / entity extraction changes, so unchanged files are re-processed.
+PIPELINE_VERSION = "2"
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents(
   id INTEGER PRIMARY KEY, source TEXT UNIQUE, title TEXT, acl TEXT, sha TEXT);
@@ -34,7 +37,7 @@ class DocumentStore:
 
     def upsert(self, source: str, title: str, acl: Acl, pieces: list[tuple[str, frozenset]], raw: str) -> bool:
         """Returns False when unchanged (same content + ACL), so re-crawls are cheap and ACL changes propagate."""
-        sha = hashlib.sha256((raw + json.dumps(acl.to_dict(), sort_keys=True)).encode()).hexdigest()
+        sha = hashlib.sha256((PIPELINE_VERSION + raw + json.dumps(acl.to_dict(), sort_keys=True)).encode()).hexdigest()
         row = self.db.execute("SELECT id, sha FROM documents WHERE source=?", (source,)).fetchone()
         if row and row[1] == sha:
             return False

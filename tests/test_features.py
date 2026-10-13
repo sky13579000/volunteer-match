@@ -10,7 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from test_platform import DEMO, DemoCase  # noqa: E402
+import test_platform  # noqa: E402
+from test_platform import DEMO  # noqa: E402
 
 from edm_ai import auth  # noqa: E402
 from edm_ai.evaluate import run_eval  # noqa: E402
@@ -23,7 +24,7 @@ from edm_ai.store import DocumentStore  # noqa: E402
 class FeatureCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        DemoCase.setUpClass.__func__(cls)
+        test_platform.DemoCase.setUpClass.__func__(cls)
 
     @classmethod
     def tearDownClass(cls):
@@ -58,6 +59,20 @@ class FeatureCase(unittest.TestCase):
         self.assertEqual(r["leaks"], 0, r["failures"])
         self.assertEqual(r["failures"], [])
         self.assertGreaterEqual(r["recall"], 0.9)
+
+    def test_new_document_searchable_after_reingest_and_removed_when_deleted(self):
+        docs = Path(self.tmp.name) / "docs"
+        f = docs / "minutes" / "신규_회의록.md"
+        f.write_text("# 신규 회의록\n\n## 안건\n누리건설 PRJ-2031 현장문서 시범 운영 일정은 11월 첫째 주로 확정되었다.\n", "utf-8")
+        try:
+            self.assertEqual(self.app.ingest()["added"], 1)
+            ans = self.ask("jung", "시범 운영 일정 현장문서")
+            self.assertIn("minutes/신규_회의록.md", {e.ref.split("#")[0] for e in ans.evidence})
+            self.assertNotIn("minutes/신규_회의록.md", {e.ref.split("#")[0] for e in self.ask("choi", "시범 운영 일정 현장문서").evidence})
+        finally:
+            f.unlink()
+        self.assertEqual(self.app.ingest()["pruned"], 1)
+        self.assertNotIn("minutes/신규_회의록.md", {e.ref.split("#")[0] for e in self.ask("jung", "시범 운영 일정 현장문서").evidence})
 
     def test_audit_chain_detects_tampering(self):
         self.ask("kim", "한빛전자 계약")
@@ -127,6 +142,19 @@ class FeatureCase(unittest.TestCase):
             s = DocumentStore(f"{d}/s.db")
             s.log_audit("u", "q2", [], False, "extractive")
             self.assertEqual(s.verify_audit(), (True, None))
+
+
+class PipelineVersion(unittest.TestCase):
+    def test_reprocesses_unchanged_files_when_pipeline_version_changes(self):
+        from edm_ai import store as st
+        s = DocumentStore()
+        self.assertTrue(s.upsert("a.md", "a", Acl(), [("x", frozenset())], "raw"))
+        self.assertFalse(s.upsert("a.md", "a", Acl(), [("x", frozenset())], "raw"))
+        old, st.PIPELINE_VERSION = st.PIPELINE_VERSION, "next"
+        try:
+            self.assertTrue(s.upsert("a.md", "a", Acl(), [("x", frozenset())], "raw"))
+        finally:
+            st.PIPELINE_VERSION = old
 
 
 class SafetyAndParsers(unittest.TestCase):

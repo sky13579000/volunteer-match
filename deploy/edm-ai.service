@@ -1,0 +1,19 @@
+# Bare-metal / air-gapped install without containers:
+#   python3 -m venv /opt/edm-ai && /opt/edm-ai/bin/pip install --no-index --find-links ./wheels "edm-ai[postgres]"
+[Unit]
+Description=EDM-AI knowledge platform
+After=network.target
+
+[Service]
+User=edmai
+EnvironmentFile=/etc/edm-ai/env             # ERP_DSN=..., EDM_AI_SECRET=...  (chmod 600)
+ExecStart=/opt/edm-ai/bin/edm-ai -c /etc/edm-ai/config.json serve --host 127.0.0.1 --port 8080
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/edm-ai
+
+[Install]
+WantedBy=multi-user.target

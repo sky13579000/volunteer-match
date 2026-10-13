@@ -8,5 +8,13 @@ dependencies = []
 [project.scripts]
 edm-ai = "edm_ai.cli:main"
 
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2"]
+oracle = ["oracledb>=2.0"]
+pdf = ["pypdf>=4.0"]
+
 [tool.setuptools]
 packages = ["edm_ai"]
+
+[tool.setuptools.package-data]
+edm_ai = ["static/*"]

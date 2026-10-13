@@ -26,6 +26,8 @@ def main(argv=None):
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8080)
+    s.add_argument("--ingest", action="store_true", help="ingest documents at startup")
+    s.add_argument("--reindex-every", type=int, default=0, metavar="SEC", help="re-crawl documents periodically")
     s.add_argument("--demo-login", action="store_true", help="user picker page; NEVER enable in production")
     args = ap.parse_args(argv)
 
@@ -63,7 +65,7 @@ def main(argv=None):
     else:
         from .server import serve
         print(f"serving on http://{args.host}:{args.port}")
-        serve(app, args.host, args.port, args.demo_login)
+        serve(app, args.host, args.port, args.demo_login, args.ingest, args.reindex_every)
 
 
 if __name__ == "__main__":
