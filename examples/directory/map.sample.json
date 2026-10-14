@@ -1,0 +1,11 @@
+{
+  "fields": {"id": "사번", "name": "이름", "dept": "부서", "title": "직급", "groups": "그룹", "email": "메일"},
+  "dept_map": {"MICE유치팀": "mice", "경영지원팀": "finance", "인사팀": "hr", "시설운영팀": "ops"},
+  "unmapped_dept": "external",
+  "group_roles": {"재무결재": "finance", "인사": "hr"},
+  "title_levels": {"사원": 1, "과장": 2, "팀장": 3},
+  "default_level": 1,
+  "max_level": 3,
+  "preserve": ["admin"],
+  "ignore_inactive": {"field": "상태", "values": ["퇴직", "휴직"]}
+}

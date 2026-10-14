@@ -118,6 +118,12 @@ def main(argv=None):
     rs.add_argument("--force", action="store_true", help="replace existing data")
     vb = sub.add_parser("verify-backup", help="check a backup archive against its manifest")
     vb.add_argument("archive")
+    su = sub.add_parser("sync-users", help="build/refresh users.json from a CSV or LDIF export (dry run unless --apply)")
+    su.add_argument("source")
+    su.add_argument("--map", help="mapping JSON (columns, dept_map, group_roles, title_levels ...)")
+    su.add_argument("--format", choices=["csv", "ldif"])
+    su.add_argument("--apply", action="store_true", help="write users.json (a .bak copy is kept); a running server reloads it automatically")
+    su.add_argument("--prune", action="store_true", help="also remove users that are not in the source (admins are never removed)")
     sub.add_parser("llm-check", help="verify the configured LLM / embedding server (connectivity, citations, grounding)")
     sub.add_parser("verify-audit", help="check the audit hash chain")
     s = sub.add_parser("serve")
@@ -151,6 +157,20 @@ def main(argv=None):
             print(_json.dumps(restore(Path(args.archive), store_path, repo, args.force)))
         except (ValueError, FileExistsError) as e:
             sys.exit(str(e))
+        sys.exit(0)
+    if args.cmd == "sync-users":                        # needs only the config's users path, not the stores
+        import json as _json
+        from pathlib import Path
+        from .directory import DirectoryError, sync
+        cfgp = Path(args.config).resolve()
+        upath = (cfgp.parent / _json.loads(cfgp.read_text("utf-8")).get("users", "users.json")).resolve()
+        try:
+            res = sync(args.source, upath, args.map, args.format, args.apply, args.prune)
+        except (DirectoryError, OSError, ValueError, KeyError) as e:
+            sys.exit(f"sync-users: {e}")
+        print(_json.dumps(res, ensure_ascii=False, indent=2))
+        if not args.apply:
+            print("\n(dry run - nothing written. Add --apply to write " + str(upath) + ")")
         sys.exit(0)
     app = App(args.config)
     if args.cmd == "backup":

@@ -1,0 +1,17 @@
+{
+  "store": "/data/store.db",
+  "users": "users.json",
+  "docs": {"root": "/data/docs"},
+  "auth": {"mode": "proxy", "header": "X-Forwarded-Email", "match": "email", "trusted_proxies": [], "logout_url": "/oauth2/sign_out"},
+  "adapters": {
+    "groupware": {
+      "secret_env": "EDM_AI_GW_SECRET", "system": "gw", "max_mb": 50, "trust_approval": true,
+      "routes": [
+        {"form": "계약품의", "folder": "MICE유치팀", "doc_type": "CT", "tags": ["그룹웨어"]},
+        {"form": "지출결의", "folder": "경영지원팀", "doc_type": "RPT"}
+      ],
+      "default_route": {"folder": "경영지원팀", "doc_type": "GEN"}
+    }
+  },
+  "dms": {"repo": "/data/repo", "folders": [{"path": "MICE유치팀"}, {"path": "경영지원팀"}]}
+}

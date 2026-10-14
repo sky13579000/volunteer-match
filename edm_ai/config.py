@@ -39,12 +39,11 @@ class App:
                              embedder=OpenAICompatEmbedder(**emb) if emb else None,
                              pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()),
                              min_coverage=self.cfg.get("retrieval", {}).get("min_coverage", 0.2))
-        users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
-        self.users = {u["id"]: Principal.from_dict(u) for u in users}
-        # e-mail addresses come from users.json ("email" or external.email); they are never returned by any API
-        self.emails = {u["id"]: (u.get("email") or (u.get("external") or {}).get("email")) for u in users if u.get("email") or (u.get("external") or {}).get("email")}
-        # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter request gets a principal
-        self.external = {(k, str(v)): u["id"] for u in users for k, v in (u.get("external") or {}).items()}
+        self.users, self.emails, self.external = {}, {}, {}
+        self._users_file = self._p(self.cfg.get("users", "users.json"))
+        self._users_mtime = 0.0
+        self._users_checked = 0.0
+        self.reload_users()
         from .dms_all import Dms
         from .mailer import Mailer
         smtp = (self.cfg.get("notify") or {}).get("smtp")
@@ -54,6 +53,41 @@ class App:
         self.dms = Dms(self, repo)
         self.dms.sync_crawled()
         self.dms.reindex_all()
+
+    def reload_users(self) -> dict:
+        """(Re)read users.json IN PLACE (other components hold references to these dicts). An invalid file keeps the old list."""
+        raw = self._users_file.read_text("utf-8")
+        users = json.loads(raw)
+        if not isinstance(users, list) or not users:
+            raise ValueError("users.json must be a non-empty list")
+        new = {u["id"]: Principal.from_dict(u) for u in users}
+        # e-mail addresses come from users.json ("email" or external.email); they are never returned by any API
+        emails = {u["id"]: (u.get("email") or (u.get("external") or {}).get("email")) for u in users if u.get("email") or (u.get("external") or {}).get("email")}
+        # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter / SSO request gets a principal
+        ext = {(k, str(v).lower() if k == "email" else str(v)): u["id"]
+               for u in users for k, v in {**({"email": u["email"]} if u.get("email") else {}), **(u.get("external") or {})}.items()}
+        for target, value in ((self.users, new), (self.emails, emails), (self.external, ext)):
+            target.clear()
+            target.update(value)
+        self._users_mtime = self._users_file.stat().st_mtime
+        return {"users": len(new)}
+
+    def refresh_users(self, every: float = 5.0):
+        """Cheap mtime poll (at most every `every` seconds): a `sync-users --apply` becomes live without a restart."""
+        import logging
+        import time
+        now = time.time()
+        if now - self._users_checked < every:
+            return
+        self._users_checked = now
+        try:
+            if self._users_file.stat().st_mtime != self._users_mtime:
+                with self.lock:
+                    log = self.reload_users()
+                logging.getLogger("edm_ai").info("users.json reloaded: %s", log)
+        except Exception:
+            logging.getLogger("edm_ai").exception("users.json reload failed (keeping the previous list)")
+            self._users_mtime = self._users_file.stat().st_mtime if self._users_file.exists() else 0.0
 
     def _p(self, rel: str) -> Path:
         return (self.base / rel).resolve()

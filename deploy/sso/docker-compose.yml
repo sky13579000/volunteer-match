@@ -1,0 +1,39 @@
+# SSO in front of EDM-AI: oauth2-proxy (OIDC) -> EDM-AI.  Works with Keycloak, Azure AD / Entra, Google, or any OIDC provider.
+# SAML / AD FS: put Keycloak (or another IdP broker) in front and use its OIDC endpoint here.
+# NOT executed in the build environment - treat as a reviewed starting point and test in your own network.
+#
+#   export OIDC_ISSUER=https://sso.example/realms/corp  OIDC_CLIENT_ID=edm-ai  OIDC_CLIENT_SECRET=...
+#   export COOKIE_SECRET=$(python3 -c 'import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')
+#   docker compose -f deploy/sso/docker-compose.yml up -d
+services:
+  edm-ai:
+    build: ../..
+    command: ["-c", "/config/config.json", "serve", "--host", "0.0.0.0", "--port", "8080", "--ingest", "--reindex-every", "300"]
+    volumes: ["edm-data:/data", "./config.json:/config/config.json:ro", "./users.json:/config/users.json"]
+    environment:
+      EDM_AI_STORE: /data/store.db
+      EDM_AI_GW_SECRET: ${EDM_AI_GW_SECRET:-}
+    networks: [internal]          # NOT published: the only way in is through the proxy (or the signed groupware endpoint below)
+
+  proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    depends_on: [edm-ai]
+    ports: ["443:4180"]            # terminate TLS here (or in front of it)
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OIDC_ISSUER}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"                 # authorisation is done by users.json (unknown e-mail -> 401), not here
+      OAUTH2_PROXY_UPSTREAMS: http://edm-ai:8080
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"           # sends X-Forwarded-Email / X-Forwarded-User to EDM-AI
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_SKIP_AUTH_ROUTES: "^/s/.*,^/api/share/.*,^/api/adapters/groupware$,^/api/health$,^/static/.*"   # public share links + signed groupware calls
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+    networks: [internal, default]
+
+volumes: {edm-data: {}}
+networks: {internal: {}}

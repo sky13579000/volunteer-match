@@ -1,0 +1,66 @@
+# 그룹웨어 · SSO · 조직도 연동
+
+세 가지를 독립적으로 쓸 수 있습니다. **구현·테스트 완료**(`tests/test_integration.py`, 29건)와 **환경에서 직접 확인해야 하는 부분**을 구분해 적었습니다.
+
+```
+ 그룹웨어/HR ──(조직도 CSV·LDIF)──▶ edm-ai sync-users ──▶ users.json ──(자동 반영)──▶ 서버
+ 사용자 브라우저 ──▶ SSO 프록시(OIDC) ──X-Forwarded-Email──▶ EDM-AI (auth.mode=proxy)
+ 그룹웨어 결재완료 ──(서명 JSON)──▶ /api/adapters/groupware ──▶ 기안자 권한으로 문서 등록
+```
+
+## 1. 조직도 동기화 (`sync-users`)
+HR/그룹웨어/AD에서 CSV 또는 LDIF로 내보낸 파일로 `users.json`을 만들고 갱신합니다. 추가 패키지 없음.
+
+```bash
+edm-ai -c config.json sync-users 조직도.csv --map examples/directory/map.sample.json            # 미리보기(기본, 아무것도 쓰지 않음)
+edm-ai -c config.json sync-users 조직도.csv --map map.json --apply                              # 적용 (users.json.bak 보관)
+edm-ai -c config.json sync-users users.ldif --map map.json --apply --prune                      # LDIF, 원본에 없는 사용자 제거
+ldapsearch -LLL -x -H ldaps://ad.corp -D "svc" -W -b "dc=corp" "(objectClass=person)" uid cn mail title departmentNumber memberOf > users.ldif
+```
+- 서버는 `users.json` 변경을 **최대 5초 안에 자동 반영**합니다(재시작 불필요). 깨진 파일이면 이전 목록을 유지하고 로그를 남깁니다.
+- 매핑 파일(`map.json`): 열/속성 이름(`fields`), 부서 매핑(`dept_map`), 그룹→역할(`group_roles`), 직급→보안등급(`title_levels`), 등급 상한(`max_level`), 보호 계정(`preserve`), 퇴직자 제외(`ignore_inactive`). 예: `examples/directory/`.
+- **안전장치**: ① 기본은 미리보기 ② `admin` 역할은 동기화로 부여·변경·삭제되지 않음 ③ 매핑에 없는 부서는 권한 없는 `external`로 ④ 등급은 `max_level`로 제한 ⑤ 관리자가 없는 결과·이메일 중복은 거부 ⑥ 한 줄씩 경고 출력 ⑦ CSV는 UTF-8/CP949(한국어 Excel) 모두 지원. 슬랙 ID 같이 원본에 없는 `external` 값은 보존됩니다.
+- 정기 실행: 작업 스케줄러/cron 에서 `sync-users ... --apply` (예: 매일 새벽).
+- **미구현**: LDAP 서버에 직접 접속하는 모드(ldapsearch 결과 LDIF를 사용). 퇴직 즉시 차단이 필요하면 SSO 쪽 계정 비활성화와 함께 쓰세요.
+
+## 2. SSO (OIDC/SAML) — 인증 프록시 방식
+EDM-AI 가 직접 OIDC/SAML 을 처리하지 않고, 앞단 프록시가 로그인시킨 뒤 이메일 헤더를 전달합니다. 비밀번호·MFA·세션은 기관의 SSO 가 담당합니다.
+
+```json
+"auth": {"mode": "proxy", "header": "X-Forwarded-Email", "match": "email",
+         "trusted_proxies": ["172.20.0.5"], "logout_url": "/oauth2/sign_out"}
+```
+- 로그인 화면이 없어지고 SSO 로 바로 진입합니다. **`users.json` 에 이메일이 없으면 401**(화면에 "등록되지 않았습니다" 안내). 이메일은 대소문자 무시.
+- `trusted_proxies`: 이 주소가 아닌 곳에서 온 헤더는 **무시**합니다(헤더 위조 방지). 지정하지 않으면 경고가 로그에 남습니다. EDM-AI 포트는 **프록시만 접근**하도록 네트워크를 분리하세요.
+- 예시: `deploy/sso/docker-compose.yml` (oauth2-proxy + OIDC). Keycloak/Entra/Google 모두 OIDC 로 연결됩니다. SAML/AD FS 는 Keycloak 등을 중간에 두는 방식을 권장합니다. **이 compose 는 개발 환경에서 실행해 보지 못했습니다** — 사내 IdP 로 시험 후 쓰세요.
+
+## 3. 그룹웨어 결재 완료 문서 → EDM 등록
+그룹웨어(또는 ESB/RPA)가 결재 완료 시 서명된 JSON 을 보냅니다.
+
+설정(`config.json`) 및 비밀값(환경변수, 16자 이상):
+```json
+"adapters": {"groupware": {"secret_env": "EDM_AI_GW_SECRET", "system": "gw", "max_mb": 50, "trust_approval": true,
+  "routes": [{"form": "계약품의", "folder": "MICE유치팀", "doc_type": "CT", "tags": ["그룹웨어"]}],
+  "default_route": {"folder": "경영지원팀", "doc_type": "GEN"}}}
+```
+호출:
+```bash
+BODY='{"doc_id":"APPR-2026-00123","form":"계약품의","title":"대관 계약 품의","owner":{"type":"email","id":"kim@iccjeju.example"},
+ "files":[{"filename":"품의서.pdf","content_b64":"<base64>"}],"approved":true,
+ "approval_line":[{"name":"박재정","title":"팀장","result":"승인","at":"2026-10-01 10:00"}]}'
+TS=$(date +%s); SIG="sha256=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$EDM_AI_GW_SECRET" -hex | sed 's/^.* //')"
+curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H "X-EDM-Signature: $SIG" -d "$BODY"
+```
+- **기안자 권한으로 등록**: `owner` 가 `users.json` 의 이메일(또는 `external`)과 매핑되어야 하고, 폴더 권한·보안등급·감사가 사람이 올릴 때와 동일하게 적용됩니다. 권한 없는 폴더면 해당 건이 `error`(403/404)로 응답됩니다(207).
+- **멱등**: 같은 `doc_id` 를 다시 보내면 중복 생성하지 않습니다. 내용이 같으면 `unchanged`, 다르면 새 버전(`updated`). 파일이 여러 개면 모두 등록하고 서로 *관련 문서*로 연결합니다.
+- `approved=true` 이고 `trust_approval` 이면 해당 버전이 **즉시 유효(승인) 버전**이 됩니다(결재선은 속성·댓글로 기록). 아니면 초안.
+- 양식(`form`) → 폴더·문서유형은 `routes` 로 매핑. 폴더는 **자동 생성하지 않습니다**(없으면 422).
+- 보안: HMAC-SHA256 서명 + 5분 유효 + 동일 서명 재전송 거부(409) + 분당 호출 제한 + 본문 크기 제한(`max_mb`).
+- 응답: `{"ok":true,"results":[{"index":0,"status":"created|updated|unchanged|error","id":..,"doc_no":..}]}` (일부 실패 시 207).
+- **미구현**: 특정 그룹웨어 제품(더존/한컴/다우 등)용 전용 커넥터. 그룹웨어의 "결재 완료 후 외부 URL 호출"(또는 ESB)로 위 JSON 을 만들어 보내도록 설정/개발해야 합니다.
+
+## 점검 체크리스트
+1. 조직도 동기화 미리보기 → 경고(미매핑 부서/등급 상한) 해소 → `--apply`
+2. SSO: 한 명의 이메일로 로그인 → `/api/me` 확인 → 등록 안 된 계정은 401 확인
+3. 그룹웨어: 테스트 양식 1건 전송 → `created` → 재전송 `unchanged` → 변경 후 `updated`
+4. 감사 로그(`verify-audit`)에 등록 기록이 기안자 이름으로 남았는지 확인

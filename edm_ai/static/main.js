@@ -38,9 +38,20 @@ async function boot() {
   state.cfg = await (await fetch("/api/config")).json();
   $("#top-search").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#top-q").value.trim(); if (q) go("#/docs?q=" + encodeURIComponent(q)); });
   $("#bell").addEventListener("click", () => go("#/notifications"));
-  $("#logout").addEventListener("click", () => { try { sessionStorage.clear(); } catch { /* ignore */ } location.hash = ""; location.reload(); });
+  $("#logout").addEventListener("click", () => {
+    try { sessionStorage.clear(); } catch { /* ignore */ }
+    if (state.cfg.auth_mode === "proxy" && state.cfg.logout_url) { location.href = state.cfg.logout_url; return; }
+    location.hash = ""; location.reload();
+  });
   window.addEventListener("hashchange", render);
   $("#login-ver").textContent = "v" + (state.cfg.version || "");
+  if (state.cfg.auth_mode === "proxy") {          // single sign-on: no login form, the proxy already authenticated the user
+    try { state.me = await api("/api/me"); return enter(); } catch { /* not registered */ }
+    $("#login-err").textContent = "SSO 로그인은 되었지만 EDM-AI 사용자로 등록되어 있지 않습니다. 관리자에게 계정 등록(조직도 동기화)을 요청하세요.";
+    $("#login").hidden = false;
+    $("#login-go").hidden = true;
+    return;
+  }
   if (state.cfg.auth_mode === "token") $("#login-token").hidden = false;
   else if (state.cfg.demo) {
     $("#login-demo").hidden = false;

@@ -35,12 +35,18 @@ def make_handler(app: App, demo_login: bool):
     acfg_ad = app.cfg.get("adapters", {})
     slack_secret = os.environ.get((acfg_ad.get("slack") or {}).get("signing_secret_env", ""), "") if acfg_ad.get("slack") else ""
     hook_secret = os.environ.get((acfg_ad.get("webhook") or {}).get("secret_env", ""), "") if acfg_ad.get("webhook") else ""
-    for name, cfg_, sec in (("slack", acfg_ad.get("slack"), slack_secret), ("webhook", acfg_ad.get("webhook"), hook_secret)):
+    gw_cfg = acfg_ad.get("groupware") or {}
+    gw_secret = os.environ.get(gw_cfg.get("secret_env", ""), "") if gw_cfg else ""
+    for name, cfg_, sec in (("slack", acfg_ad.get("slack"), slack_secret), ("webhook", acfg_ad.get("webhook"), hook_secret),
+                            ("groupware", acfg_ad.get("groupware"), gw_secret)):
         if cfg_ and sec and len(sec) < 16:      # unset secret = adapter disabled; a WEAK secret is refused
             raise SystemExit(f"adapter '{name}': secret must be at least 16 characters")
         if cfg_ and not sec:
             log.info("adapter '%s' disabled (secret env var not set)", name)
     replay = adapters.ReplayGuard()
+    trusted = set(acfg.get("trusted_proxies", []))
+    if acfg["mode"] == "proxy" and not trusted:
+        log.warning("auth.mode=proxy without trusted_proxies: ANY client that can reach this port can claim any identity. Bind to 127.0.0.1 or set trusted_proxies.")
     lock = app.lock  # DB connections are shared across request threads and the re-indexer
     routes = build_routes(app)
     dms = app.dms
@@ -92,6 +98,17 @@ def make_handler(app: App, demo_login: bool):
             if acfg["mode"] == "token":
                 tok = self.headers.get("Authorization", "")
                 return app.users.get(auth.verify(secret, tok[7:]) or "") if tok.startswith("Bearer ") else None
+            if acfg["mode"] == "proxy":
+                # identity asserted by an authenticating reverse proxy (oauth2-proxy / Nginx + OIDC / SAML). Only accepted
+                # from the configured proxy addresses; the e-mail (or id) must be mapped in users.json - unknown = 401.
+                if trusted and self.client_address[0] not in trusted:
+                    return None
+                v = (self.headers.get(acfg.get("header", "X-Forwarded-Email"), "") or "").strip()
+                if not v:
+                    return None
+                if acfg.get("match", "email") == "email":
+                    return app.users.get(app.external.get(("email", v.lower()), ""))
+                return app.users.get(v)
             # header mode: ONLY behind an authenticating proxy (SSO/mTLS) that strips client-supplied copies.
             return app.users.get(self.headers.get(acfg.get("header", "X-User-Id"), ""))
 
@@ -146,7 +163,8 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(200, (STATIC / "share.html").read_text("utf-8"), "text/html")
                 if path == "/api/config":
                     return self._send(200, {"auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
-                                            "examples": app.cfg.get("examples", []), "version": __version__})
+                                            "examples": app.cfg.get("examples", []), "version": __version__,
+                                            "logout_url": acfg.get("logout_url", "") if acfg["mode"] == "proxy" else ""})
                 if path == "/api/demo-users":
                     if not (demo_login and acfg["mode"] == "header"):
                         return self._send(404, {"error": "not found"})
@@ -157,6 +175,7 @@ def make_handler(app: App, demo_login: bool):
                 return self._public_share(method, path)
             if method == "POST" and path.startswith("/api/adapters/"):
                 return self._adapter(path)
+            app.refresh_users()
             u = self._user()
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
@@ -215,7 +234,8 @@ def make_handler(app: App, demo_login: bool):
         def _adapter(self, path: str):
             """Slack slash command / signed webhook. Authenticated by signature, never by the user headers."""
             n = int(self.headers.get("Content-Length", 0))
-            if n > 65536:
+            cap = int(gw_cfg.get("max_mb", 50)) * 1048576 * 4 // 3 + 65536 if path == "/api/adapters/groupware" else 65536
+            if n > cap:
                 return self._send(413, {"error": "too large"})
             raw = self.rfile.read(n)
             if path == "/api/adapters/slack" and slack_secret:
@@ -233,6 +253,26 @@ def make_handler(app: App, demo_login: bool):
                 with lock:
                     ans = app.engine.ask(app.users[uid], cmd["text"][:2000]).to_dict()
                 return self._send(200, {"response_type": "ephemeral", "text": adapters.format_chat(ans)})   # ephemeral: only the asker sees it
+            if path == "/api/adapters/groupware" and gw_secret:
+                ts, sig = self.headers.get("X-EDM-Timestamp", ""), self.headers.get("X-EDM-Signature", "")
+                if not adapters.verify_webhook(gw_secret, ts, raw, sig):
+                    return self._send(401, {"error": "bad signature"})
+                if not replay.fresh(sig):
+                    return self._send(409, {"error": "replayed request"})
+                try:
+                    b = json.loads(raw)
+                    assert isinstance(b, dict)
+                except Exception:
+                    return self._send(400, {"error": "bad request"})
+                if self._limited("gw", 600):
+                    return self._send(429, {"error": "rate limited"})
+                from . import groupware
+                try:
+                    with lock:
+                        res = groupware.ingest(app, gw_cfg, b)
+                except DmsError as e:
+                    return self._send(e.code, {"error": e.msg})
+                return self._send(200 if res["ok"] else 207, res)
             if path == "/api/adapters/webhook" and hook_secret:
                 ts, sig = self.headers.get("X-EDM-Timestamp", ""), self.headers.get("X-EDM-Signature", "")
                 if not adapters.verify_webhook(hook_secret, ts, raw, sig):
@@ -242,7 +282,7 @@ def make_handler(app: App, demo_login: bool):
                 try:
                     b = json.loads(raw)
                     ident, q = b["user"], str(b["question"]).strip()[:2000]
-                    uid = app.external.get((str(ident["type"]), str(ident["id"])))
+                    uid = app.external.get((str(ident["type"]), str(ident["id"]).lower() if ident["type"] == "email" else str(ident["id"])))
                     assert q
                 except Exception:
                     return self._send(400, {"error": "bad request"})

@@ -32,6 +32,7 @@ export const userName = (id) => state.meta?.users.find((u) => u.id === id)?.name
 export function authHeaders() {
   const h = {};
   try {
+    if (state.cfg.auth_mode === "proxy") return h;            // identity comes from the SSO proxy, never from the browser
     if (state.cfg.auth_mode === "token") h.Authorization = "Bearer " + (sessionStorage.getItem("token") || "");
     else h["X-User-Id"] = sessionStorage.getItem("uid") || "";
   } catch { /* storage blocked */ }
