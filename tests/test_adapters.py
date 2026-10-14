@@ -172,7 +172,7 @@ class Http(unittest.TestCase):
         self.assertEqual((name, data), ("client_up.md", f.read_bytes()))
         self.assertTrue(c.comment(d["id"], "클라이언트 댓글")["id"])
         self.assertEqual(c.delete(d["id"])["deleted"], d["doc_no"])
-        self.assertEqual(c.alerts(), [])
+        self.assertFalse([a for a in c.alerts() if a["doc_id"] == d["id"]])      # (the seeded demo has a deliberate mismatch of its own)
 
 
 if __name__ == "__main__":

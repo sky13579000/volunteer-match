@@ -36,6 +36,9 @@ class DemoCase(unittest.TestCase):
         db.close()
         cls.app = App(str(t / "config.json"))
         cls.app.ingest()
+        sys.path.insert(0, str(DEMO))
+        import seed                       # the regulation set and demo workflow documents live in the managed repository
+        seed.seed(cls.app)
 
     @classmethod
     def tearDownClass(cls):
