@@ -73,7 +73,7 @@ def run_demo(args):
         lan = (f"\n  ! 같은 네트워크의 다른 PC 에서는  http://{_lan_ip()}:{port}/  로 접속합니다 (방화벽에서 {port} 허용 필요).\n"
                "  ! 데모는 로그인 비밀번호가 없습니다 - 신뢰할 수 있는 내부망에서만 쓰세요. 실제 운영은 docs/OPERATIONS.md 의 인증 설정을 따르세요.\n")
     bar = "=" * 66
-    print(f"\n{bar}\n  EDM-AI v{__version__}  문서중앙화 + AI  (폴더·버전·결재·보존·공유·감사)\n"
+    print(f"\n{bar}\n  ICC JEJU 문서·AI 플랫폼 v{__version__}  (제주국제컨벤션센터)\n"
           f"  이 주소를 여세요  ->  {url}\n{stale}{lan}"
           f"  상단에서 김유치(MICE유치) / 박재정(경영지원) / 최협력(외부) 를 바꿔 보세요.  종료: Ctrl+C\n{bar}\n")
     if not args.no_browser:

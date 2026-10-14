@@ -25,7 +25,7 @@ async function enter() {
   state.meta = await api("/api/dms/config");
   $("#login").hidden = true;
   $("#shell").hidden = false;
-  $("#ver").textContent = "EDM-AI v" + (state.cfg.version || "?");
+  $("#ver").textContent = "ICC JEJU 플랫폼 v" + (state.cfg.version || "?");
   $("#who").textContent = `${state.me.name} · ${state.me.dept || "-"} · L${state.me.level}`;
   buildNav();
   refreshBell();
@@ -47,7 +47,7 @@ async function boot() {
   $("#login-ver").textContent = "v" + (state.cfg.version || "");
   if (state.cfg.auth_mode === "proxy") {          // single sign-on: no login form, the proxy already authenticated the user
     try { state.me = await api("/api/me"); return enter(); } catch { /* not registered */ }
-    $("#login-err").textContent = "SSO 로그인은 되었지만 EDM-AI 사용자로 등록되어 있지 않습니다. 관리자에게 계정 등록(조직도 동기화)을 요청하세요.";
+    $("#login-err").textContent = "SSO 로그인은 되었지만 플랫폼 사용자로 등록되어 있지 않습니다. 관리자에게 계정 등록(조직도 동기화)을 요청하세요.";
     $("#login").hidden = false;
     $("#login-go").hidden = true;
     return;

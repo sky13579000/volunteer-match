@@ -45,13 +45,13 @@ class Mailer:
 
     def build(self, to: str, kind: str, doc_no: str | None, title: str | None, doc_id) -> EmailMessage:
         what = KINDS.get(kind, "새 알림이 있습니다")
-        subject = f"[EDM-AI] {what}" + (f" - {clean(doc_no, 40)}" if doc_no else "")
+        subject = f"[ICC JEJU] {what}" + (f" - {clean(doc_no, 40)}" if doc_no else "")
         lines = [what + "."]
         if doc_no and title and self.include_title:
             lines.append(f"문서: {clean(doc_no, 40)} {clean(title, 120)}")
         if self.base_url and doc_id:
             lines.append(f"바로가기: {self.base_url}/#/doc/{int(doc_id)}" + ("?tab=approval" if kind == "approval_request" else ""))
-        lines.append("\n이 메일은 EDM-AI 가 자동으로 보냈습니다. 알림 설정에서 메일 수신을 끌 수 있습니다.")
+        lines.append("\n이 메일은 ICC JEJU 문서·AI 플랫폼이 자동으로 보냈습니다. 알림 설정에서 메일 수신을 끌 수 있습니다.")
         msg = EmailMessage()
         msg["From"], msg["To"], msg["Subject"] = self.sender, clean(to), clean(subject)
         msg.set_content("\n".join(lines))

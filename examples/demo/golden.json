@@ -131,7 +131,29 @@
     "question": "제주관광공사 지체상금 계약",
     "must_not_contain": [
       "480000000",
-      "지체상금"
+      "CT-2024-001",
+      "4억 8천만원"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "시설 사용 취소 위약금 비율은 얼마인가",
+    "must_contain": [
+      "80%"
+    ]
+  },
+  {
+    "user": "choi",
+    "question": "행사 참가자 개인정보 파기 기한",
+    "must_contain": [
+      "3개월"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "3억원 이상 계약 결재",
+    "must_contain": [
+      "대표이사"
     ]
   }
 ]
