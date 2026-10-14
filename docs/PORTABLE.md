@@ -33,3 +33,9 @@ python edm-ai.pyz demo --lan     # 또는  run-demo.bat --lan
 | 옛 화면/옛 데이터 | `demo --reset` (작업 공간을 새로 만듦) |
 | 포트 사용 중 | 자동으로 다음 빈 포트를 쓰며 화면에 주소가 표시됨. `--port` 로 지정도 가능 |
 | 한글이 깨짐 | Windows 터미널은 자동으로 UTF-8 설정. 그래도 깨지면 Windows Terminal 사용 |
+
+## 서버 PC 자동 실행 (Windows)
+- `start-server.bat` 더블클릭: 이전에 떠 있던 EDM-AI 종료 → LAN 공개로 시작 → `http://<IP>:8787/` 표시. 데이터는 유지됩니다(`start-server.bat --reset` 으로 초기화).
+- `install-autostart.bat`: Windows 로그인 때마다 자동 시작 등록. 해제는 `uninstall-autostart.bat`.
+- 방화벽: 관리자 권한으로 `start-server.bat` 를 한 번 실행하면 8787~8806 포트 허용 규칙이 등록됩니다.
+- IP 가 바뀌지 않게 서버 PC 는 고정 IP(또는 DHCP 예약)를 권장합니다.

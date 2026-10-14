@@ -62,7 +62,11 @@ def run_demo(args):
         import shutil
         shutil.rmtree(demo / "workspace", ignore_errors=True)
         shutil.rmtree(demo / "docs" / "uploads", ignore_errors=True)
-    runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
+    try:
+        runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
+    except PermissionError as e:
+        sys.exit(f"\n데모 파일이 다른 프로세스(이전에 띄운 EDM-AI 서버)에서 사용 중입니다: {e.filename}\n"
+                 "그 서버 창을 Ctrl+C 로 끄거나, start-server.bat 를 실행하면 이전 서버를 자동 종료합니다.")
     url = f"http://{probe_host}:{port}/"
     lan = ""
     if args.lan:
