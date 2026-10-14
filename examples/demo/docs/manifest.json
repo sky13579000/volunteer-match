@@ -1,11 +1,84 @@
 {
-  "default": {"roles": ["admin"], "level": 99},
+  "default": {
+    "roles": [
+      "admin"
+    ],
+    "level": 99
+  },
   "rules": [
-    {"glob": "contracts/*", "acl": {"depts": ["sales", "finance"], "level": 2}},
-    {"glob": "minutes/*",   "acl": {"depts": ["sales", "finance", "consulting"], "level": 1}},
-    {"glob": "mail/*",      "acl": {"depts": ["sales", "finance"], "level": 2}},
-    {"glob": "finance/*",   "acl": {"roles": ["finance"], "level": 3}},
-    {"glob": "hr/*",        "acl": {"roles": ["hr"], "level": 3}},
-    {"glob": "drawings/*",  "acl": {"level": 1}}
+    {
+      "glob": "contracts/누리*",
+      "acl": {
+        "depts": [
+          "consulting",
+          "finance"
+        ],
+        "level": 2
+      }
+    },
+    {
+      "glob": "contracts/*",
+      "acl": {
+        "depts": [
+          "sales",
+          "finance"
+        ],
+        "level": 2
+      }
+    },
+    {
+      "glob": "minutes/*",
+      "acl": {
+        "depts": [
+          "sales",
+          "finance",
+          "consulting"
+        ],
+        "level": 1
+      }
+    },
+    {
+      "glob": "mail/*",
+      "acl": {
+        "depts": [
+          "sales",
+          "finance"
+        ],
+        "level": 2
+      }
+    },
+    {
+      "glob": "finance/*",
+      "acl": {
+        "roles": [
+          "finance"
+        ],
+        "level": 3
+      }
+    },
+    {
+      "glob": "hr/*",
+      "acl": {
+        "roles": [
+          "hr"
+        ],
+        "level": 3
+      }
+    },
+    {
+      "glob": "drawings/*",
+      "acl": {
+        "level": 1
+      }
+    },
+    {
+      "glob": "uploads/*",
+      "acl": {
+        "roles": [
+          "admin"
+        ],
+        "level": 99
+      }
+    }
   ]
 }

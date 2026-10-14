@@ -177,5 +177,12 @@
     "고객사별 계약금액 합계",
     "PRJ-2024 미수 청구 합계",
     "김영업 성과 등급과 보너스"
-  ]
+  ],
+  "automation": {
+    "contract_check": {
+      "table": "CONTRACTS",
+      "amount_col": "AMOUNT",
+      "due_col": "DUE_DATE"
+    }
+  }
 }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import re
 import json
 import logging
 import os
@@ -7,10 +9,12 @@ import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import auth
 from .config import App
+from .edm import EdmError
 
 log = logging.getLogger("edm_ai")
 STATIC = Path(__file__).parent / "static"
@@ -60,6 +64,34 @@ def make_handler(app: App, demo_login: bool):
         def do_POST(self):
             self._safe(self._post)
 
+        def do_PUT(self):
+            self._safe(self._put)
+
+        def do_DELETE(self):
+            self._safe(self._delete)
+
+        def _body(self, limit: int) -> dict:
+            n = int(self.headers.get("Content-Length", 0))
+            if n > limit:
+                raise EdmError(413, "요청이 너무 큽니다")
+            try:
+                d = json.loads(self.rfile.read(n))
+                assert isinstance(d, dict)
+                return d
+            except Exception:
+                raise EdmError(400, "bad request")
+
+        def _doc_route(self, path: str):
+            m = re.fullmatch(r"/api/docs/(\d+)(/acl)?", path)
+            return (int(m.group(1)), bool(m.group(2))) if m else None
+
+        def _edm(self, fn):
+            try:
+                with lock:
+                    return self._send(200, fn())
+            except EdmError as e:
+                return self._send(e.code, {"error": e.msg})
+
         def _safe(self, fn):
             try:
                 fn()
@@ -73,24 +105,34 @@ def make_handler(app: App, demo_login: bool):
                     pass
 
         def _get(self):
-            if self.path in FILES:
-                name, ctype = FILES[self.path]
+            url = urlparse(self.path)
+            path = url.path
+            if path in FILES:
+                name, ctype = FILES[path]
                 return self._send(200, (STATIC / name).read_text("utf-8"), ctype)
-            if self.path == "/api/config":
+            if path == "/api/config":
                 return self._send(200, {"auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
                                         "examples": app.cfg.get("examples", [])})
-            if self.path == "/api/demo-users":
+            if path == "/api/demo-users":
                 if not (demo_login and acfg["mode"] == "header"):
                     return self._send(404, {"error": "not found"})
                 return self._send(200, [{"id": x.id, "name": x.name, "dept": x.dept, "level": x.level} for x in app.users.values()])
             u = self._user()
-            if self.path == "/api/health":
+            if path == "/api/health":
                 return self._send(200, {"ok": True})
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
-            if self.path == "/api/me":
+            if path == "/api/me":
                 return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles})
-            if self.path == "/api/audit":
+            if path == "/api/docs":
+                q = (parse_qs(url.query).get("q") or [""])[0].strip()[:200] or None
+                return self._edm(lambda: app.edm.list(u, q))
+            if path == "/api/alerts":
+                return self._edm(lambda: app.edm.alerts(u))
+            route = self._doc_route(path)
+            if route and not route[1]:
+                return self._edm(lambda: app.edm.get(u, route[0]))
+            if path == "/api/audit":
                 if "admin" not in u.roles:
                     return self._send(403, {"error": "forbidden"})
                 with lock:
@@ -102,10 +144,20 @@ def make_handler(app: App, demo_login: bool):
             u = self._user()
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
-            if self.path != "/api/ask":
-                return self._send(404, {"error": "not found"})
+            path = urlparse(self.path).path
             if self._limited(u.id):
                 return self._send(429, {"error": "rate limited"})
+            if path == "/api/docs":
+                def up():
+                    b = self._body(16 * 1024 * 1024)
+                    try:
+                        data = base64.b64decode(b.get("content_b64", ""), validate=True)
+                    except Exception:
+                        raise EdmError(400, "content_b64 가 올바르지 않습니다")
+                    return app.edm.upload(u, b.get("filename", ""), data, b.get("acl"))
+                return self._edm(up)
+            if path != "/api/ask":
+                return self._send(404, {"error": "not found"})
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 q = str(json.loads(self.rfile.read(min(n, 65536)))["question"]).strip()
@@ -115,6 +167,28 @@ def make_handler(app: App, demo_login: bool):
             with lock:
                 result = app.engine.ask(u, q).to_dict()
             self._send(200, result)
+
+        def _put(self):
+            u = self._user()
+            if not u:
+                return self._send(401, {"error": "unauthenticated"})
+            route = self._doc_route(urlparse(self.path).path)
+            if not (route and route[1]):
+                return self._send(404, {"error": "not found"})
+            if self._limited(u.id):
+                return self._send(429, {"error": "rate limited"})
+            return self._edm(lambda: app.edm.set_acl(u, route[0], self._body(65536).get("acl")))
+
+        def _delete(self):
+            u = self._user()
+            if not u:
+                return self._send(401, {"error": "unauthenticated"})
+            route = self._doc_route(urlparse(self.path).path)
+            if not (route and not route[1]):
+                return self._send(404, {"error": "not found"})
+            if self._limited(u.id):
+                return self._send(429, {"error": "rate limited"})
+            return self._edm(lambda: app.edm.delete(u, route[0]))
 
         def log_message(self, *a):
             pass

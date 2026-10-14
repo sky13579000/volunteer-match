@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS chunks(
 CREATE TABLE IF NOT EXISTS audit(
   id INTEGER PRIMARY KEY, ts TEXT, user_id TEXT, question TEXT,
   evidence TEXT, refused INTEGER, generator TEXT, prev TEXT, hash TEXT);
+CREATE TABLE IF NOT EXISTS doc_meta(
+  source TEXT PRIMARY KEY, owner TEXT, managed INTEGER DEFAULT 0, created TEXT);
+CREATE TABLE IF NOT EXISTS acl_overrides(
+  source TEXT PRIMARY KEY, acl TEXT, by_user TEXT, ts TEXT);
+CREATE TABLE IF NOT EXISTS doc_history(
+  id INTEGER PRIMARY KEY, source TEXT, ts TEXT, user_id TEXT, action TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS embeddings(
   chunk_id INTEGER REFERENCES chunks(id) ON DELETE CASCADE, model TEXT, vec TEXT, PRIMARY KEY(chunk_id, model));
 """
@@ -77,6 +83,44 @@ class DocumentStore:
                 h = self._digest(prev, r[1] or "", r[2], r[3], r[4], r[5], r[6])
                 self.db.execute("UPDATE audit SET prev=?, hash=? WHERE id=?", (prev, h, r[0]))
                 prev = h
+
+    # ---- EDM metadata: ownership, ACL overrides (set from the UI), history ----
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    def set_meta(self, source: str, owner: str, managed: bool):
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO doc_meta(source,owner,managed,created) VALUES(?,?,?,COALESCE("
+                            "(SELECT created FROM doc_meta WHERE source=?),?))",
+                            (source, owner, int(managed), source, self._now()))
+
+    def get_meta(self, source: str) -> dict:
+        r = self.db.execute("SELECT owner,managed,created FROM doc_meta WHERE source=?", (source,)).fetchone()
+        return {"owner": r[0], "managed": bool(r[1]), "created": r[2]} if r else {"owner": None, "managed": False, "created": None}
+
+    def set_acl_override(self, source: str, acl: Acl, by: str):
+        with self.db:
+            self.db.execute("INSERT OR REPLACE INTO acl_overrides VALUES(?,?,?,?)",
+                            (source, json.dumps(acl.to_dict()), by, self._now()))
+
+    def acl_overrides(self) -> dict[str, Acl]:
+        return {r[0]: Acl.from_dict(json.loads(r[1])) for r in self.db.execute("SELECT source, acl FROM acl_overrides")}
+
+    def forget(self, source: str):
+        with self.db:
+            for t in ("doc_meta", "acl_overrides"):
+                self.db.execute(f"DELETE FROM {t} WHERE source=?", (source,))
+            self.db.execute("DELETE FROM documents WHERE source=?", (source,))
+
+    def add_history(self, source: str, user_id: str, action: str, detail: str = ""):
+        with self.db:
+            self.db.execute("INSERT INTO doc_history(source,ts,user_id,action,detail) VALUES(?,?,?,?,?)",
+                            (source, self._now(), user_id, action, detail))
+
+    def history(self, source: str, limit: int = 50) -> list[dict]:
+        return [{"ts": r[0], "user": r[1], "action": r[2], "detail": r[3]} for r in self.db.execute(
+            "SELECT ts,user_id,action,detail FROM doc_history WHERE source=? ORDER BY id DESC LIMIT ?", (source, limit))]
 
     def get_embeddings(self, model: str) -> dict[int, list[float]]:
         return {r[0]: json.loads(r[1]) for r in

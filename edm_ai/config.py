@@ -22,7 +22,7 @@ class App:
     def __init__(self, config_path: str):
         cp = Path(config_path).resolve()
         self.base = cp.parent
-        self.lock = threading.Lock()  # serialises the shared DB connections (requests, re-indexing)
+        self.lock = threading.RLock()  # serialises the shared DB connections (requests, re-indexing)
         self.cfg = json.loads(cp.read_text("utf-8"))
         store_path = os.environ.get("EDM_AI_STORE") or str(self._p(self.cfg.get("store", "store.db")))  # env wins: containers
         self.store = DocumentStore(store_path)
@@ -39,6 +39,8 @@ class App:
                              embedder=OpenAICompatEmbedder(**emb) if emb else None,
                              pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()),
                              min_coverage=self.cfg.get("retrieval", {}).get("min_coverage", 0.2))
+        from .edm import Edm
+        self.edm = Edm(self)
         users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
         self.users = {u["id"]: Principal.from_dict(u) for u in users}
 

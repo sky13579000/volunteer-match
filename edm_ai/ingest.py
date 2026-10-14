@@ -70,12 +70,13 @@ def ingest_dir(root: Path, manifest_path: Path | None, store: DocumentStore, ext
     default = Acl.from_dict(manifest.get("default", {"roles": ["admin"], "level": 99}))
     stats = {"added": 0, "unchanged": 0, "pruned": 0, "skipped": []}
     seen = set()
+    overrides = store.acl_overrides()   # ACLs edited in the UI take precedence over manifest rules
     for path in sorted(root.rglob("*")):
         if path.suffix.lower() not in SUPPORTED or not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
         seen.add(rel)
-        acl = next((Acl.from_dict(r["acl"]) for r in rules if fnmatch.fnmatch(rel, r["glob"])), default)
+        acl = overrides.get(rel) or next((Acl.from_dict(r["acl"]) for r in rules if fnmatch.fnmatch(rel, r["glob"])), default)
         try:
             title, text = read_file(path)
         except (Unsupported, zipfile.BadZipFile, OSError, ET.ParseError, subprocess.SubprocessError) as e:
@@ -83,6 +84,9 @@ def ingest_dir(root: Path, manifest_path: Path | None, store: DocumentStore, ext
             seen.discard(rel)
             continue
         pieces = [(c, extractor.extract(f"{title}\n{c}")) for c in chunk_text(text)]
-        stats["added" if store.upsert(rel, title, acl, pieces, text) else "unchanged"] += 1
+        changed = store.upsert(rel, title, acl, pieces, text)
+        stats["added" if changed else "unchanged"] += 1
+        if changed:
+            store.add_history(rel, "system", "indexed", f"{len(pieces)} chunks")
     stats["pruned"] = store.prune(seen)
     return stats
