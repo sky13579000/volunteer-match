@@ -41,7 +41,7 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "질문 (CLI) - 영업 사용자",
+      "name": "질문 (CLI) - MICE유치 사용자",
       "type": "debugpy",
       "request": "launch",
       "module": "edm_ai",
@@ -85,7 +85,7 @@
       "id": "question",
       "type": "promptString",
       "description": "질문",
-      "default": "한빛전자 MES 계약 금액과 납기 지연 이슈는?"
+      "default": "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"
     }
   ]
 }

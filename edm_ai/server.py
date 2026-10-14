@@ -227,7 +227,7 @@ def make_handler(app: App, demo_login: bool):
                 if not uid:
                     return self._send(200, {"response_type": "ephemeral", "text": "이 Slack 계정은 EDM-AI 사용자와 연결되어 있지 않습니다. 관리자에게 문의하세요."})
                 if not cmd["text"]:
-                    return self._send(200, {"response_type": "ephemeral", "text": "사용법: /edm 한빛전자 계약 금액은?"})
+                    return self._send(200, {"response_type": "ephemeral", "text": "사용법: /edm 제주관광공사 계약 금액은?"})
                 if self._limited(uid):
                     return self._send(200, {"response_type": "ephemeral", "text": "요청이 너무 많습니다. 잠시 후 다시 시도하세요."})
                 with lock:

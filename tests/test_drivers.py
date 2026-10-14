@@ -70,13 +70,13 @@ class PostgresIntegration(unittest.TestCase):
     def test_decimal_aggregates_and_grouping(self):
         e = next(x for x in self.app.engine.ask(self.app.users["park"], "고객사별 계약금액 합계").evidence
                  if x.ref == "metric:contract_by_customer")
-        self.assertIn("한빛전자: 480,000,000", e.text)
+        self.assertIn("제주관광공사: 480,000,000", e.text)
 
     def test_percent_in_values_is_safe(self):
         self.assertEqual(self.app.gateway.lookup(self.app.users["park"], {"customer:100%", "project:%"}), [])
 
     def test_row_policy_and_masking(self):
-        ids = {e.ref for e in self.app.engine.ask(self.app.users["kim"], "PRJ-2031 누리건설 계약").evidence}
+        ids = {e.ref for e in self.app.engine.ask(self.app.users["kim"], "EVT-2031 제주도청 계약").evidence}
         self.assertNotIn("contracts:CT-2031-003", ids)
 
 
@@ -117,14 +117,14 @@ class OracleIntegration(unittest.TestCase):
 
     def test_reserved_word_bind_and_unused_params(self):
         # row policies bind :dept; :level is an Oracle reserved word and :uid is unused in the SQL
-        rows = self.app.gateway.lookup(self.app.users["kim"], {"project:PRJ-2024"})
+        rows = self.app.gateway.lookup(self.app.users["kim"], {"project:EVT-2024"})
         self.assertEqual([r["key"] for r in rows], ["CT-2024-001"])
         self.assertIn("margin_rate".upper(), rows[0]["masked"])
 
     def test_aggregate_with_group_by(self):
         e = next(x for x in self.app.engine.ask(self.app.users["park"], "고객사별 계약금액 합계").evidence
                  if x.ref == "metric:contract_by_customer")
-        self.assertIn("한빛전자: 480,000,000", e.text)
+        self.assertIn("제주관광공사: 480,000,000", e.text)
 
     def test_row_policy_blocks_other_departments(self):
-        self.assertEqual(self.app.gateway.lookup(self.app.users["kim"], {"project:PRJ-2031"}), [])
+        self.assertEqual(self.app.gateway.lookup(self.app.users["kim"], {"project:EVT-2031"}), [])

@@ -73,17 +73,17 @@ class ServerCase(unittest.TestCase):
     def test_ask_is_permission_scoped_over_http(self):
         base = self.serve({"mode": "header"})
         def refs(uid):
-            _, _, b = call(base, "/api/ask", "POST", {"X-User-Id": uid}, {"question": "PRJ-2024 원가 마진 성과 보너스"})
+            _, _, b = call(base, "/api/ask", "POST", {"X-User-Id": uid}, {"question": "EVT-2024 원가 마진 성과 보너스"})
             return {e["ref"].split("#")[0] for e in json.loads(b)["evidence"]}
-        self.assertIn("finance/PRJ-2024_원가분석.md", refs("park"))
-        self.assertNotIn("finance/PRJ-2024_원가분석.md", refs("kim"))
+        self.assertIn("finance/EVT-2024_원가분석.md", refs("park"))
+        self.assertNotIn("finance/EVT-2024_원가분석.md", refs("kim"))
         self.assertNotIn("hr/2024_성과평가_및_보상.md", refs("kim"))
 
     def test_audit_admin_only_and_rate_limit(self):
         base = self.serve({"mode": "header"}, limit=2)
         self.assertEqual(call(base, "/api/audit", headers={"X-User-Id": "kim"})[0], 403)
         self.assertTrue(json.loads(call(base, "/api/audit", headers={"X-User-Id": "admin"})[2])["chain_ok"])
-        codes = [call(base, "/api/ask", "POST", {"X-User-Id": "jung"}, {"question": "한빛전자"})[0] for _ in range(4)]
+        codes = [call(base, "/api/ask", "POST", {"X-User-Id": "jung"}, {"question": "제주관광공사"})[0] for _ in range(4)]
         self.assertEqual(codes, [200, 200, 429, 429])
 
     def test_internal_error_returns_json_500_not_dropped_connection(self):
@@ -91,7 +91,7 @@ class ServerCase(unittest.TestCase):
         orig = self.app.engine.ask
         self.app.engine.ask = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom secret-path"))
         try:
-            code, _, body = call(base, "/api/ask", "POST", {"X-User-Id": "kim"}, {"question": "한빛전자"})
+            code, _, body = call(base, "/api/ask", "POST", {"X-User-Id": "kim"}, {"question": "제주관광공사"})
         finally:
             self.app.engine.ask = orig
         self.assertEqual(code, 500)

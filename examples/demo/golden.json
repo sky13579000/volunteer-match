@@ -1,9 +1,9 @@
 [
   {
     "user": "kim",
-    "question": "한빛전자 MES 지체상금 조항",
+    "question": "제주관광공사 MICE 위크 지체상금 조항",
     "expect": [
-      "contracts/한빛전자"
+      "contracts/제주관광공사"
     ],
     "forbid": [
       "hr/",
@@ -12,14 +12,14 @@
   },
   {
     "user": "park",
-    "question": "PRJ-2024 원가 마진 위험",
+    "question": "EVT-2024 원가 마진 위험",
     "expect": [
-      "finance/PRJ-2024"
+      "finance/EVT-2024"
     ]
   },
   {
     "user": "lee",
-    "question": "PRJ-2024 프로젝트 리더 성과 등급 보너스",
+    "question": "EVT-2024 프로젝트 리더 성과 등급 보너스",
     "expect": [
       "hr/"
     ]
@@ -33,7 +33,7 @@
   },
   {
     "user": "choi",
-    "question": "한빛전자 지체상금 계약",
+    "question": "제주관광공사 지체상금 계약",
     "forbid": [
       "contracts/",
       "mail/",
@@ -46,28 +46,28 @@
   },
   {
     "user": "choi",
-    "question": "대성정밀 도면 공차 검토",
+    "question": "제주해양포럼 전시장 동선 검토",
     "expect": [
-      "drawings/"
+      "layouts/"
     ]
   },
   {
     "user": "jung",
-    "question": "PRJ-2031 누리건설 계약",
+    "question": "EVT-2031 제주도청 계약",
     "expect": [
       "contracts:CT-2031-003"
     ]
   },
   {
     "user": "kim",
-    "question": "PRJ-2031 누리건설 계약",
+    "question": "EVT-2031 제주도청 계약",
     "forbid": [
       "contracts:CT-2031-003"
     ]
   },
   {
     "user": "park",
-    "question": "PRJ-2024 미수 청구 합계",
+    "question": "EVT-2024 미수 청구 합계",
     "expect": [
       "metric:unpaid_total"
     ]
@@ -79,34 +79,34 @@
   },
   {
     "user": "choi",
-    "question": "한빛전자 MES 계약 금액과 PRJ-2024 원가 마진 이슈는?",
+    "question": "제주관광공사 MICE 위크 계약 금액과 EVT-2024 원가 마진 이슈는?",
     "forbid": [
-      "drawings/"
+      "layouts/"
     ]
   },
   {
     "user": "choi",
     "question": "회사 연차 휴가 규정이 뭐야",
     "forbid": [
-      "drawings/"
+      "layouts/"
     ]
   },
   {
     "user": "kim",
-    "question": "한빛전자 MES 계약 금액과 PRJ-2024 원가 마진 이슈는?",
+    "question": "제주관광공사 MICE 위크 계약 금액과 EVT-2024 원가 마진 이슈는?",
     "expect": [
-      "contracts/한빛전자",
+      "contracts/제주관광공사",
       "minutes/"
     ],
     "forbid": [
-      "drawings/"
+      "layouts/"
     ]
   },
   {
     "user": "park",
-    "question": "지체 상금 한빛 전자 조항",
+    "question": "지체 상금 제주 관광공사 조항",
     "expect": [
-      "contracts/한빛전자"
+      "contracts/제주관광공사"
     ]
   },
   {
@@ -118,7 +118,7 @@
   },
   {
     "user": "kim",
-    "question": "한빛전자 MES 계약 금액",
+    "question": "제주관광공사 MICE 위크 계약 금액",
     "must_contain": [
       "480,000,000"
     ],
@@ -128,7 +128,7 @@
   },
   {
     "user": "choi",
-    "question": "한빛전자 지체상금 계약",
+    "question": "제주관광공사 지체상금 계약",
     "must_not_contain": [
       "480000000",
       "지체상금"

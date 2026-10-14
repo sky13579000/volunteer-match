@@ -87,7 +87,7 @@ function metaDialog(d, reload) {
   const exp = el("input", { type: "date", id: "m-exp", value: d.expires_at || "" });
   const nodl = el("input", { type: "checkbox", id: "m-nodl", checked: !!d.props?.no_download });
   props.value = Object.entries(d.props || {}).filter(([k]) => k !== "no_download").map(([k, v]) => `${k}: ${v}`).join("\n");
-  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 한빛전자"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
+  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 제주관광공사"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
     el("label", { class: "inline" }, nodl, "다운로드 제한 (파일 반출·외부 공유 다운로드·ZIP 내보내기 차단. 화면 열람은 가능)")),
     [{ label: "취소", value: false }, { label: "저장", primary: true, run: async () => {
       const pr = {}; for (const line of props.value.split("\n")) { const i = line.indexOf(":"); if (i > 0) pr[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
@@ -113,7 +113,7 @@ function infoTab(d, reload) {
   const checks = a.checks?.length ? el("div", { class: "sec" }, el("h3", {}, "업무 DB 대조"), table(["항목", "문서", "DB", "결과", "DB 행"], a.checks.map((c) => [c.field, typeof c.doc === "number" ? fmtNum(c.doc) : c.doc,
     typeof c.db === "number" ? fmtNum(c.db) : c.db, pill(c.status === "ok" ? "일치" : "불일치", c.status === "ok" ? "ok" : "bad"), c.row]))) : "";
   const fields = Object.keys(a.fields || {}).length ? el("div", { class: "sec" }, el("h3", {}, "자동 추출 항목"), el("dl", { class: "dl" }, Object.entries(a.fields).flatMap(([k, v]) =>
-    [el("dt", {}, { contract_no: "계약번호", project: "프로젝트", amount: "계약금액", due_date: "납기" }[k] || k), el("dd", {}, typeof v === "number" ? fmtNum(v) + "원" : v)]))) : "";
+    [el("dt", {}, { contract_no: "계약번호", project: "행사", amount: "계약금액", due_date: "납기" }[k] || k), el("dd", {}, typeof v === "number" ? fmtNum(v) + "원" : v)]))) : "";
   const rows = d.linked_rows?.length ? el("div", { class: "sec" }, el("h3", {}, "연결된 업무 DB 행"), d.linked_rows.map((r) => el("div", { class: "ev row" }, el("b", {}, `${r.title} · ${r.key}`),
     el("div", { class: "t" }, Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join("\n")), r.masked.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + r.masked.join(", ")) : ""))) : "";
   return el("div", {}, dl, el("div", { class: "row sec" }, lifecycle), a.summary ? el("div", { class: "sec" }, el("h3", {}, `자동 요약 · ${a.category}`), el("p", { class: "flush" }, a.summary)) : "",

@@ -1,7 +1,7 @@
 """Tiny dependency-free client for other systems (groupware, RPA, batch jobs).
 
     c = EdmClient("http://edm-ai:8080", token="...")        # token from `edm-ai token -u <user>`
-    ans = c.ask("한빛전자 계약 금액은?")
+    ans = c.ask("제주관광공사 계약 금액은?")
     doc = c.upload("계약서.docx", doc_type="CT", tags=["계약"])
     c.submit(doc["id"], ["park"])                            # 결재 요청
     for hit in c.search("지체상금", type="CT")["items"]: print(hit["doc_no"], hit["title"])

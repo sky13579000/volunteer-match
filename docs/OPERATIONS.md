@@ -6,11 +6,11 @@
   "repo": "workspace/repo",            // 저장 파일 위치 (기본: 저장소 DB 옆 repo/). 컨테이너는 /data/repo
   "max_upload_mb": 50, "trash_days": 30, "expiry_warn_days": 30,
   "external_share": {"enabled": false, "max_days": 30, "max_level": 1},   // 기본은 꺼짐 (켤 때 의식적으로)
-  "folders": [{"path": "영업팀", "entries": [{"type": "dept", "id": "sales", "role": "editor"}]}],
+  "folders": [{"path": "MICE유치팀", "entries": [{"type": "dept", "id": "mice", "role": "editor"}]}],
   "doc_types": [{"code": "CT", "name": "계약서", "pattern": "CT-{year}-{seq:04}", "retention_years": 10, "approval_required": true}]
 },
-"notify": {"base_url": "https://edm.example.co.kr",
-           "smtp": {"host": "smtp.example.co.kr", "port": 587, "starttls": true, "from": "edm@example.co.kr",
+"notify": {"base_url": "https://edm.iccjeju.example",
+           "smtp": {"host": "smtp.iccjeju.example", "port": 587, "starttls": true, "from": "edm@iccjeju.example",
                     "user_env": "SMTP_USER", "password_env": "SMTP_PASSWORD", "include_title": true}}
 ```
 - `doc_types`/`folders` 는 **처음 시작할 때만** 반영됩니다. 이후 문서유형은 관리 화면에서, 폴더는 문서함에서 관리하세요.

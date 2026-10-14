@@ -93,41 +93,41 @@ class Http(unittest.TestCase):
 
     # ---- slack ----
     def test_slack_answer_is_permission_scoped_and_ephemeral(self):
-        code, fin = self.slack("U0PARK001", "PRJ-2024 원가 마진 이슈")
+        code, fin = self.slack("U0PARK001", "EVT-2024 원가 마진 이슈")
         self.assertEqual(code, 200)
         self.assertEqual(fin["response_type"], "ephemeral")
-        self.assertIn("PRJ-2024_원가분석", fin["text"])
-        _, sales = self.slack("U0KIM0001", "PRJ-2024 원가 마진 이슈")
-        self.assertNotIn("원가분석", sales["text"])                    # same question, sales identity: finance doc excluded
+        self.assertIn("EVT-2024_원가분석", fin["text"])
+        _, mice = self.slack("U0KIM0001", "EVT-2024 원가 마진 이슈")
+        self.assertNotIn("원가분석", mice["text"])                    # same question, mice identity: finance doc excluded
 
     def test_slack_rejects_bad_signature_stale_timestamp_and_unknown_user(self):
         self.assertEqual(self.slack("U0KIM0001", "x", secret="wrong-secret-0123456789abcdef")[0], 401)
         self.assertEqual(self.slack("U0KIM0001", "x", ts=str(int(time.time()) - 4000))[0], 401)
-        code, r = self.slack("U_UNKNOWN", "한빛전자 계약")
+        code, r = self.slack("U_UNKNOWN", "제주관광공사 계약")
         self.assertEqual(code, 200)
         self.assertIn("연결되어 있지 않습니다", r["text"])             # never answered as someone else
         self.assertEqual(self.slack("U0KIM0001", "")[1]["text"][:4], "사용법:")
 
     def test_spoofed_user_header_does_not_authenticate_adapter(self):
-        body = urllib.parse.urlencode({"user_id": "U0PARK001", "text": "한빛전자"}).encode()
+        body = urllib.parse.urlencode({"user_id": "U0PARK001", "text": "제주관광공사"}).encode()
         code, _ = self.post("/api/adapters/slack", body, {"X-User-Id": "admin"})
         self.assertEqual(code, 401)
 
     # ---- webhook ----
     def test_webhook_by_email_identity(self):
-        code, r = self.hook({"type": "email", "id": "park@example.co.kr"}, "고객사별 계약금액 합계")
+        code, r = self.hook({"type": "email", "id": "park@iccjeju.example"}, "고객사별 계약금액 합계")
         self.assertEqual(code, 200)
         self.assertIn("850,000,000", r["text"])
         self.assertTrue(r["evidence"])
 
     def test_webhook_security(self):
-        ident = {"type": "email", "id": "kim@example.co.kr"}
+        ident = {"type": "email", "id": "kim@iccjeju.example"}
         self.assertEqual(self.hook(ident, "x", secret="wrong-secret-0123456789abcdef")[0], 401)
         self.assertEqual(self.hook(ident, "x", ts=str(int(time.time()) - 4000))[0], 401)
-        self.assertEqual(self.hook({"type": "email", "id": "nobody@x.com"}, "한빛전자")[0], 403)
+        self.assertEqual(self.hook({"type": "email", "id": "nobody@x.com"}, "제주관광공사")[0], 403)
         self.assertEqual(self.hook(ident, "x", raw=b"not json")[0], 400)
         ts = str(int(time.time()))
-        body = json.dumps({"user": ident, "question": "한빛전자 계약"}).encode()
+        body = json.dumps({"user": ident, "question": "제주관광공사 계약"}).encode()
         h = {"X-EDM-Timestamp": ts, "X-EDM-Signature": adapters.webhook_sign(HOOK, ts, body)}
         self.assertEqual(self.post("/api/adapters/webhook", body, h)[0], 200)
         self.assertEqual(self.post("/api/adapters/webhook", body, h)[0], 409)      # exact replay refused
@@ -157,7 +157,7 @@ class Http(unittest.TestCase):
     # ---- python client ----
     def test_client_against_real_server(self):
         c = EdmClient(self.base, token=auth.issue("t" * 32, "kim"))
-        ans = c.ask("한빛전자 계약 금액")
+        ans = c.ask("제주관광공사 계약 금액")
         self.assertTrue(ans["evidence"])
         self.assertTrue(c.search("지체상금")["items"])
         with self.assertRaises(EdmApiError) as cm:

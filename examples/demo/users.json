@@ -1,19 +1,19 @@
 [
   {
     "id": "kim",
-    "name": "김영업",
-    "dept": "sales",
+    "name": "김유치",
+    "dept": "mice",
     "roles": [],
     "level": 2,
     "external": {
       "slack": "U0KIM0001",
-      "email": "kim@example.co.kr"
+      "email": "kim@iccjeju.example"
     },
-    "email": "kim@example.co.kr"
+    "email": "kim@iccjeju.example"
   },
   {
     "id": "park",
-    "name": "박재무",
+    "name": "박재정",
     "dept": "finance",
     "roles": [
       "finance"
@@ -21,9 +21,9 @@
     "level": 3,
     "external": {
       "slack": "U0PARK001",
-      "email": "park@example.co.kr"
+      "email": "park@iccjeju.example"
     },
-    "email": "park@example.co.kr"
+    "email": "park@iccjeju.example"
   },
   {
     "id": "lee",
@@ -33,15 +33,15 @@
       "hr"
     ],
     "level": 3,
-    "email": "lee@example.co.kr"
+    "email": "lee@iccjeju.example"
   },
   {
     "id": "jung",
-    "name": "정컨설",
-    "dept": "consulting",
+    "name": "정도청",
+    "dept": "provincial",
     "roles": [],
     "level": 2,
-    "email": "jung@example.co.kr"
+    "email": "jung@iccjeju.example"
   },
   {
     "id": "choi",
@@ -63,6 +63,6 @@
       "admin"
     ],
     "level": 99,
-    "email": "admin@example.co.kr"
+    "email": "admin@iccjeju.example"
   }
 ]

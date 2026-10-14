@@ -79,7 +79,7 @@
 
 ## 서명 웹훅 (그룹웨어·RPA·사내 시스템)
 ```bash
-BODY='{"user":{"type":"email","id":"park@example.co.kr"},"question":"고객사별 계약금액 합계"}'
+BODY='{"user":{"type":"email","id":"park@iccjeju.example"},"question":"고객사별 계약금액 합계"}'
 TS=$(date +%s)
 SIG="sha256=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$EDM_AI_WEBHOOK_SECRET" -hex | sed 's/^.* //')"
 curl -s http://localhost:8080/api/adapters/webhook \
@@ -91,7 +91,7 @@ curl -s http://localhost:8080/api/adapters/webhook \
 ```python
 from edm_ai.client import EdmClient
 c = EdmClient("http://edm-ai:8080", token="...")
-print(c.ask("한빛전자 계약 금액은?")["answer"])
-doc = c.upload("계약서.docx", acl={"depts": ["sales"], "level": 2})
+print(c.ask("제주관광공사 계약 금액은?")["answer"])
+doc = c.upload("계약서.docx", acl={"depts": ["mice"], "level": 2})
 print(c.alerts())
 ```

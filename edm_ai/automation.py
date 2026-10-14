@@ -48,7 +48,7 @@ CATEGORIES = {
     "이메일": ["보낸사람", "받는사람", "회신", "드립니다"],
     "재무/원가": ["원가", "마진", "인건비", "외주", "예산", "청구"],
     "인사": ["성과", "평가", "보상", "급여", "채용"],
-    "도면/기술": ["도면", "공차", "rev.", "설계", "ISO"],
+    "시설/배치": ["배치도", "동선", "rev.", "설계", "시설"],
 }
 
 
@@ -70,7 +70,7 @@ def extract_fields(text: str) -> dict:
     m = re.search(r"CT-\d{4}-\d{3}", text)
     if m:
         f["contract_no"] = m.group()
-    m = re.search(r"PRJ-\d{4}", text)
+    m = re.search(r"EVT-\d{4}", text)
     if m:
         f["project"] = m.group()
     for s in sentences(text):

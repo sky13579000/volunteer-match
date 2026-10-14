@@ -7,7 +7,7 @@
   },
   "entities": {
     "patterns": {
-      "project": "PRJ-\\d{4}",
+      "project": "EVT-\\d{4}",
       "contract": "CT-\\d{4}-\\d{3}"
     },
     "dictionaries": [
@@ -57,7 +57,7 @@
             "label": "계약번호"
           },
           "project_code": {
-            "label": "프로젝트"
+            "label": "행사"
           },
           "customer_name": {
             "label": "고객사"
@@ -99,7 +99,7 @@
             "label": "청구번호"
           },
           "project_code": {
-            "label": "프로젝트"
+            "label": "행사"
           },
           "amount": {
             "label": "청구금액(원)"
@@ -170,11 +170,11 @@
     "mode": "header"
   },
   "examples": [
-    "한빛전자 MES 계약 금액과 납기 지연 이슈는?",
+    "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?",
     "지체상금 조항이 있는 계약과 청구 현황",
     "고객사별 계약금액 합계",
-    "PRJ-2024 미수 청구 합계",
-    "김영업 성과 등급과 보너스"
+    "EVT-2024 미수 청구 합계",
+    "김유치 성과 등급과 보너스"
   ],
   "automation": {
     "contract_check": {

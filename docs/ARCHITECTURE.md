@@ -33,7 +33,7 @@
 ## 확장 지점
 | 목적 | 위치 |
 |---|---|
-| PDF/Office/OCR/도면 변환 | `ingest.read_file` |
+| PDF/Office/OCR/CAD 변환 | `ingest.read_file` |
 | 의미 검색(임베딩) 병행 | `Index.search` (RRF로 BM25와 결합) |
 | Oracle/PostgreSQL/Tibero | `SqlGateway.__init__`의 connect, 나머지는 DB-API 동일 |
 | LDAP/AD 그룹 → 역할 | `App.users` 로더 |

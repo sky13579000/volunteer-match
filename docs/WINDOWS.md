@@ -31,9 +31,9 @@ py -m unittest discover -s tests -v
 # 권한 누출 평가 (leaks 0 이어야 정상)
 py -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json
 
-# 터미널에서 질문 (사용자: kim 영업 / park 재무 / lee 인사 / choi 외부)
-py -m edm_ai -c examples/demo/config.json ask -u kim  "한빛전자 MES 계약 금액과 납기 지연 이슈는?"
-py -m edm_ai -c examples/demo/config.json ask -u park "한빛전자 MES 계약 금액과 납기 지연 이슈는?"
+# 터미널에서 질문 (사용자: kim MICE유치 / park 경영지원 / lee 인사 / choi 외부)
+py -m edm_ai -c examples/demo/config.json ask -u kim  "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"
+py -m edm_ai -c examples/demo/config.json ask -u park "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"
 ```
 
 ## 4. 실제 운영처럼 (토큰 인증)
@@ -48,7 +48,7 @@ API 호출 예 (PowerShell):
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/ask `
   -Headers @{ Authorization = "Bearer $tok" } `
-  -Body (@{ question = "한빛전자 계약 금액" } | ConvertTo-Json) -ContentType "application/json; charset=utf-8"
+  -Body (@{ question = "제주관광공사 계약 금액" } | ConvertTo-Json) -ContentType "application/json; charset=utf-8"
 ```
 
 ## 5. PostgreSQL / Docker (선택)

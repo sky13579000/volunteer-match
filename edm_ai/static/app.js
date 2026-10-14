@@ -174,7 +174,7 @@ function renderDetail(sum, det, note) {
     const f = det.analysis.fields;
     if (Object.keys(f).length) {
       const dl = el("dl", { class: "dl" });
-      const names = { contract_no: "계약번호", project: "프로젝트", amount: "계약금액", due_date: "납기" };
+      const names = { contract_no: "계약번호", project: "행사", amount: "계약금액", due_date: "납기" };
       for (const [k, v] of Object.entries(f)) dl.append(el("dt", {}, names[k] || k), el("dd", {}, typeof v === "number" ? v.toLocaleString() + "원" : v));
       kids.push(sec("자동 추출 항목", dl));
     }

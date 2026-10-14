@@ -8,7 +8,7 @@ _SENT = re.compile(r"(?<=[.!?])\s+|\n+")
 
 def tokenize(s: str) -> list[str]:
     """Language-light tokenizer: lowercase words + Hangul character bigrams.
-    Bigrams make Korean josa/eomi variants ('한빛전자의') match their stems without a morphological analyzer."""
+    Bigrams make Korean josa/eomi variants ('제주관광공사의') match their stems without a morphological analyzer."""
     out: list[str] = []
     for m in _TOKEN.finditer(s.lower()):
         w = m.group()

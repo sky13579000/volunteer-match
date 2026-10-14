@@ -67,7 +67,7 @@ class MailCase(unittest.TestCase):
         test_platform.DemoCase.setUpClass.__func__(cls)
         cls.smtp = FakeSmtp()
         cls.d, cls.U = cls.app.dms, cls.app.users
-        cls.app.mailer = Mailer({"host": "127.0.0.1", "port": cls.smtp.server_address[1], "from": "edm@example.co.kr"}, "https://edm.example.co.kr")
+        cls.app.mailer = Mailer({"host": "127.0.0.1", "port": cls.smtp.server_address[1], "from": "edm@iccjeju.example"}, "https://edm.iccjeju.example")
 
     @classmethod
     def tearDownClass(cls):
@@ -94,21 +94,21 @@ class MailCase(unittest.TestCase):
     def test_approval_request_mail_has_link_but_no_document_text(self):
         r = self.ct()
         self.d.submit(self.U["kim"], r["id"], ["park"], note="메모에 적은 내용")
-        got = self.mails_to("park@example.co.kr")
+        got = self.mails_to("park@iccjeju.example")
         self.assertEqual(len(got), 1)
         body = got[0]["body"]
         self.assertIn("결재 요청", got[0]["subject"])
-        self.assertIn(f"https://edm.example.co.kr/#/doc/{r['id']}?tab=approval", body)
+        self.assertIn(f"https://edm.iccjeju.example/#/doc/{r['id']}?tab=approval", body)
         self.assertIn(r["doc_no"], body)
         self.assertNotIn("secretbody", body)                       # document text never leaves the system
         self.assertNotIn("메모에 적은 내용", body)
-        self.assertIn("edm@example.co.kr", got[0]["from"])
+        self.assertIn("edm@iccjeju.example", got[0]["from"])
 
     def test_comment_mail_never_contains_the_comment(self):
         r = self.d.register(self.U["kim"], "d.md", "# 댓글\n\n본문.".encode(), doc_type="GEN")
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "user", "id": "park", "role": "viewer"}, {"type": "dept", "id": "sales", "role": "editor"}])
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "user", "id": "park", "role": "viewer"}, {"type": "dept", "id": "mice", "role": "editor"}])
         self.d.add_comment(self.U["kim"], r["id"], "@park 극비 금액 9999억 공개 금지")
-        got = self.mails_to("park@example.co.kr")[0]
+        got = self.mails_to("park@iccjeju.example")[0]
         self.assertIn("언급", got["subject"])
         self.assertNotIn("9999", got["body"] + got["subject"])
         self.assertNotIn("극비", got["body"] + got["subject"])
@@ -118,31 +118,31 @@ class MailCase(unittest.TestCase):
         self.d.set_prefs(self.U["park"], False)
         r = self.ct("옵트아웃 시험")
         self.d.submit(self.U["kim"], r["id"], ["park"])
-        self.assertEqual(self.mails_to("park@example.co.kr"), [])
+        self.assertEqual(self.mails_to("park@iccjeju.example"), [])
         self.assertTrue(self.d.q1("SELECT 1 AS x FROM notifications WHERE user_id='park' AND doc_id=?", (r["id"],)))   # in-app copy is unaffected
         self.d.set_prefs(self.U["park"], True)
         r2 = self.ct("옵트인 시험")
         self.d.submit(self.U["kim"], r2["id"], ["park"])
-        self.assertEqual(len(self.mails_to("park@example.co.kr")), 1)
+        self.assertEqual(len(self.mails_to("park@iccjeju.example")), 1)
 
     def test_header_injection_is_neutralised(self):
         self.assertEqual(clean("a\r\nBcc: evil@x.com"), "a Bcc: evil@x.com")
         r = self.ct("제목\r\nBcc: evil@example.com\r\nX-Evil: 1")
         self.d.submit(self.U["kim"], r["id"], ["park"])
-        got = self.mails_to("park@example.co.kr")[0]
+        got = self.mails_to("park@iccjeju.example")[0]
         head = got["data"].split("\r\n\r\n", 1)[0]
         self.assertNotIn("\nBcc:", head)
         self.assertNotIn("\nX-Evil:", head)
         self.assertIsNone(got["msg"]["Bcc"])
         self.assertIsNone(got["msg"]["X-Evil"])
-        self.assertEqual(got["to"], ["park@example.co.kr"])                                  # nobody else was added as a recipient
+        self.assertEqual(got["to"], ["park@iccjeju.example"])                                  # nobody else was added as a recipient
 
     def test_title_can_be_left_out_and_users_without_email_get_none(self):
         self.app.mailer.include_title = False
         try:
             r = self.ct("제목은 숨김 제목시험")
             self.d.submit(self.U["kim"], r["id"], ["park"])
-            self.assertNotIn("제목시험", self.mails_to("park@example.co.kr")[0]["body"])
+            self.assertNotIn("제목시험", self.mails_to("park@iccjeju.example")[0]["body"])
         finally:
             self.app.mailer.include_title = True
         saved = dict(self.app.emails)
@@ -150,7 +150,7 @@ class MailCase(unittest.TestCase):
         try:
             r = self.ct("메일주소 없음")
             self.d.submit(self.U["kim"], r["id"], ["lee"])
-            self.assertEqual(self.mails_to("lee@example.co.kr"), [])
+            self.assertEqual(self.mails_to("lee@iccjeju.example"), [])
             self.assertTrue(self.d.q1("SELECT 1 AS x FROM notifications WHERE user_id='lee' AND doc_id=?", (r["id"],)))
         finally:
             self.app.emails.update(saved)

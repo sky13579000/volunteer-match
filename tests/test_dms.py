@@ -22,8 +22,8 @@ class Base(unittest.TestCase):
         test_platform.DemoCase.setUpClass.__func__(cls)
         cls.d = cls.app.dms
         cls.U = cls.app.users
-        cls.f_sales = cls.d.q1("SELECT id FROM folders WHERE name='영업팀'")["id"]
-        cls.f_fin = cls.d.q1("SELECT id FROM folders WHERE name='재무팀'")["id"]
+        cls.f_sales = cls.d.q1("SELECT id FROM folders WHERE name='MICE유치팀'")["id"]
+        cls.f_fin = cls.d.q1("SELECT id FROM folders WHERE name='경영지원팀'")["id"]
         cls.f_hr = cls.d.q1("SELECT id FROM folders WHERE name='인사팀'")["id"]
         cls.f_rules = cls.d.q1("SELECT id FROM folders WHERE name='규정'")["id"]
 
@@ -53,7 +53,7 @@ class Registration(Base):
         a, b = self.reg(doc_type="GEN"), self.reg(doc_type="GEN")
         self.assertRegex(a["doc_no"], r"^GEN-\d{4}-\d{4}$")
         self.assertEqual(int(b["doc_no"][-4:]), int(a["doc_no"][-4:]) + 1)
-        self.assertEqual(self.d.row(a["id"])["entries"], [{"type": "dept", "id": "sales", "role": "editor"}])   # author's dept only
+        self.assertEqual(self.d.row(a["id"])["entries"], [{"type": "dept", "id": "mice", "role": "editor"}])   # author's dept only
         self.assertIn(a["id"], self.ids("kim"))
         for other in ("jung", "park", "choi", "lee"):
             self.assertNotIn(a["id"], self.ids(other), other)
@@ -82,11 +82,11 @@ class Registration(Base):
         self.assertTrue(all(self.d.repo.resolve() in f.resolve().parents for f in self.d.repo.rglob("evil.md")))
 
     def test_folder_permissions(self):
-        self.err(404, self.d.register, self.U["jung"], "x.md", b"x", folder_id=self.f_sales)     # cannot even see 영업팀
+        self.err(404, self.d.register, self.U["jung"], "x.md", b"x", folder_id=self.f_sales)     # cannot even see MICE유치팀
         self.err(403, self.d.register, self.U["park"], "x.md", b"x", folder_id=self.f_sales)     # finance is only a viewer there
         self.err(404, self.d.register, self.U["choi"], "x.md", b"x", folder_id=self.f_hr)          # cannot even see the folder
-        r = self.d.register(self.U["kim"], "ok.md", "# 영업\n\n영업팀 문서 내용입니다 폴더테스트.".encode(), folder_id=self.f_sales)
-        self.assertEqual(r["folder_path"], "영업팀")
+        r = self.d.register(self.U["kim"], "ok.md", "# 유치\n\nMICE유치팀 문서 내용입니다 폴더테스트.".encode(), folder_id=self.f_sales)
+        self.assertEqual(r["folder_path"], "MICE유치팀")
         self.assertIn(r["id"], self.ids("kim"))
         self.assertIn(r["id"], self.ids("park"))        # finance is a viewer of the folder: inherited read, published (GEN auto-approved)
         self.assertNotIn(r["id"], self.ids("jung"))
@@ -116,7 +116,7 @@ class BatchConsistency(Base):
             self.assertIn("edit", r["perms"])
             v = self.d.new_version(self.U["kim"], r["id"], "b.md", "# 배치\n\n두번째 batchprobe.".encode())
             self.assertEqual(v["current_ver"], 2)
-            self.assertEqual(self.d.move(self.U["kim"], r["id"], self.f_sales)["folder_path"], "영업팀")
+            self.assertEqual(self.d.move(self.U["kim"], r["id"], self.f_sales)["folder_path"], "MICE유치팀")
             self.assertNotIn(r["id"], self.ids("jung"))                                   # and still invisible to outsiders mid-batch
         self.assertIn(r["id"], self.ids("kim", "batchprobe"))                             # index caught up when the batch ended
 
@@ -254,8 +254,8 @@ class Versions(Base):
         did = r["id"]
         self.d.checkout(self.U["kim"], did)
         self.assertEqual(self.d.get(self.U["kim"], did)["locked_by"], "kim")
-        # another editor of the folder (a sales colleague is not in the demo users, so grant jung editor via entries)
-        self.d.set_acl(self.U["kim"], did, entries=[{"type": "dept", "id": "sales", "role": "editor"}, {"type": "user", "id": "jung", "role": "editor"}])
+        # another editor of the folder (a mice colleague is not in the demo users, so grant jung editor via entries)
+        self.d.set_acl(self.U["kim"], did, entries=[{"type": "dept", "id": "mice", "role": "editor"}, {"type": "user", "id": "jung", "role": "editor"}])
         self.err(409, self.d.checkout, self.U["jung"], did)
         self.err(409, self.d.new_version, self.U["jung"], did, "c.md", b"# jung change")
         self.err(403, self.d.cancel_checkout, self.U["jung"], did)
@@ -303,19 +303,19 @@ class Permissions(Base):
         self.assertIn(r["id"], self.ids("admin"))                                        # listed (flagged) when not searching
         self.assertNotIn(r["id"], self.ids("admin", "관리자가 읽으면"))                    # but never findable by content
         self.err(403, self.d.download, a, r["id"])                                       # administering is not reading
-        self.assertTrue(self.d.set_acl(a, r["id"], entries=[{"type": "dept", "id": "sales", "role": "viewer"}]))
+        self.assertTrue(self.d.set_acl(a, r["id"], entries=[{"type": "dept", "id": "mice", "role": "viewer"}]))
         self.assertTrue(self.d.delete(a, r["id"]))
 
     def test_folder_inheritance_and_cascade(self):
         top = self.d.create_folder(self.U["admin"], None, "상속시험")
-        self.d.set_folder_acl(self.U["admin"], top["id"], [{"type": "dept", "id": "sales", "role": "editor"}])
+        self.d.set_folder_acl(self.U["admin"], top["id"], [{"type": "dept", "id": "mice", "role": "editor"}])
         sub = self.d.create_folder(self.U["admin"], top["id"], "하위")
         r = self.d.register(self.U["kim"], "i.md", "# 상속\n\n상속 시험 문서입니다 cascade.".encode(), folder_id=sub["id"])
         self.assertEqual(self.d.row(r["id"])["entries"], [])                              # nothing at document level
         self.assertNotIn(r["id"], self.ids("park"))
-        self.d.set_folder_acl(self.U["admin"], top["id"], [{"type": "dept", "id": "sales", "role": "editor"}, {"type": "dept", "id": "finance", "role": "viewer"}])
+        self.d.set_folder_acl(self.U["admin"], top["id"], [{"type": "dept", "id": "mice", "role": "editor"}, {"type": "dept", "id": "finance", "role": "viewer"}])
         self.assertIn(r["id"], self.ids("park"))                                          # the change cascaded into the index
-        self.d.set_acl(self.U["kim"], r["id"], inherit=False, entries=[{"type": "dept", "id": "sales", "role": "editor"}])
+        self.d.set_acl(self.U["kim"], r["id"], inherit=False, entries=[{"type": "dept", "id": "mice", "role": "editor"}])
         self.assertNotIn(r["id"], self.ids("park"))                                       # inheritance switched off on the document
 
     def test_move_changes_who_can_read(self):
@@ -326,7 +326,7 @@ class Permissions(Base):
 
     def test_deny_entry_overrides_grants(self):
         r = self.reg(text="# 제외\n\n제외 시험 문서입니다.")
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "sales", "role": "viewer"}, {"type": "dept", "id": "finance", "role": "viewer"},
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "mice", "role": "viewer"}, {"type": "dept", "id": "finance", "role": "viewer"},
                                                         {"type": "deny", "id": "park"}])
         self.assertNotIn(r["id"], self.ids("park"))
 
@@ -403,7 +403,7 @@ class Lifecycle(Base):
 class Collaboration(Base):
     def test_comments_mentions_and_notifications(self):
         r = self.reg(text="# 협업\n\n댓글 시험 문서입니다.")
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "sales", "role": "editor"}, {"type": "user", "id": "park", "role": "viewer"}])
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "mice", "role": "editor"}, {"type": "user", "id": "park", "role": "viewer"}])
         c = self.d.add_comment(self.U["kim"], r["id"], "@park 확인 부탁드립니다 @choi 도 봐주세요")
         self.assertTrue(self.d.q1("SELECT 1 AS x FROM notifications WHERE user_id='park' AND kind='mention' AND doc_id=?", (r["id"],)))
         self.assertIsNone(self.d.q1("SELECT 1 AS x FROM notifications WHERE user_id='choi' AND doc_id=?", (r["id"],)))   # a mention never reveals a document
@@ -423,7 +423,7 @@ class Collaboration(Base):
         self.d.add_comment(self.U["kim"], r["id"], "@park 비밀 내용 secretnote")
         self.assertIn("secretnote", json.dumps(self.d.notifications(self.U["park"]), ensure_ascii=False))
         self.d.set_acl(self.U["kim"], r["id"], entries=[])
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "sales", "role": "editor"}])
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "mice", "role": "editor"}])
         txt = json.dumps(self.d.notifications(self.U["park"]), ensure_ascii=False)
         self.assertNotIn("secretnote", txt)
 
@@ -441,7 +441,7 @@ class Collaboration(Base):
         self.assertIn(r["id"], {x["id"] for x in self.d.favorites(self.U["kim"])})
         self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "user", "id": "park", "role": "viewer"}])
         self.d.set_favorite(self.U["park"], r["id"], True)
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "sales", "role": "editor"}])
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "mice", "role": "editor"}])
         self.assertNotIn(r["id"], {x["id"] for x in self.d.favorites(self.U["park"])})           # a stale favourite reveals nothing
         self.d.get(self.U["kim"], r["id"])
         self.assertIn(r["id"], {x["id"] for x in self.d.recent(self.U["kim"])})
@@ -531,7 +531,7 @@ class Sharing(Base):
     def test_create_requires_published_manager_and_low_level(self):
         r = self.pub()
         self.err(404, self.d.create_share, self.U["choi"], r["id"])
-        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "sales", "role": "editor"}, {"type": "user", "id": "park", "role": "viewer"}])
+        self.d.set_acl(self.U["kim"], r["id"], entries=[{"type": "dept", "id": "mice", "role": "editor"}, {"type": "user", "id": "park", "role": "viewer"}])
         self.err(403, self.d.create_share, self.U["park"], r["id"])                       # viewers cannot share
         ct = self.reg(doc_type="CT", text="# 계약\n\n초안은 공유 불가.")
         self.err(409, self.d.create_share, self.U["kim"], ct["id"])                      # unpublished draft
@@ -643,7 +643,7 @@ class BulkAndZip(Base):
         self.assertIn("c.docx", reasons)
         self.assertNotIn(".DS_Store", reasons)
         paths = {self.d.get(self.U["kim"], c["id"])["folder_path"] for c in res["created"]}
-        self.assertEqual(paths, {"영업팀 / 계약 / 2026", "영업팀 / 계약"})
+        self.assertEqual(paths, {"MICE유치팀 / 계약 / 2026", "MICE유치팀 / 계약"})
         self.assertFalse((self.d.repo.parent / "escape.md").exists())
 
     def test_zip_import_into_the_open_registration_folder(self):
@@ -699,22 +699,22 @@ class Admin(Base):
 class CrawledDocs(Base):
     def test_crawled_documents_are_listed_but_read_only(self):
         listed = {x["source"]: x for x in self.d.search(self.U["park"], origin="crawled")["items"]}
-        self.assertIn("contracts/한빛전자_MES_계약요약.md", listed)
-        doc = listed["contracts/한빛전자_MES_계약요약.md"]
+        self.assertIn("contracts/제주관광공사_MICE위크_대관계약요약.md", listed)
+        doc = listed["contracts/제주관광공사_MICE위크_대관계약요약.md"]
         self.assertTrue(doc["doc_no"].startswith("EXT-"))
         full = self.d.get(self.U["park"], doc["id"])
         self.assertNotIn("edit", full["perms"])
         self.err(403, self.d.new_version, self.U["park"], doc["id"], "x.md", b"x")
         self.assertEqual(self.d.add_comment(self.U["park"], doc["id"], "외부 문서 댓글")["text"], "외부 문서 댓글")
         name, data, _ = self.d.download(self.U["park"], doc["id"])
-        self.assertEqual(name, "한빛전자_MES_계약요약.md")
+        self.assertEqual(name, "제주관광공사_MICE위크_대관계약요약.md")
         self.assertIn("지체상금", data.decode())
         hr = next(x for x in self.d.search(self.U["lee"], origin="crawled")["items"] if x["source"].startswith("hr/"))
         self.err(404, self.d.get, self.U["kim"], hr["id"])
         self.err(404, self.d.download, self.U["kim"], hr["id"])
 
     def test_admin_changes_crawled_acl_and_it_survives_reingest(self):
-        d = next(x for x in self.d.search(self.U["choi"], origin="crawled")["items"] if x["source"].startswith("drawings/"))
+        d = next(x for x in self.d.search(self.U["choi"], origin="crawled")["items"] if x["source"].startswith("layouts/"))
         self.d.set_acl(self.U["admin"], d["id"], entries=[{"type": "role", "id": "hr", "role": "viewer"}], level=3)
         self.app.ingest()
         self.assertNotIn(d["id"], self.ids("choi"))

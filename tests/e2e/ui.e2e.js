@@ -31,8 +31,8 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   // ===== kim: dashboard, register, approval request =====
   const kim = await login('kim');
   ok('dashboard shows KPI cards', (await kim.$$('.kpi')).length >= 6);
-  ok('dashboard lists my approval requests', (await kim.textContent('#view')).includes('한빛전자 MES 2단계 제안서'));
-  ok('sidebar has no admin group for sales user', !(await kim.textContent('#nav')).includes('감사 로그'));
+  ok('dashboard lists my approval requests', (await kim.textContent('#view')).includes('제주관광공사 MICE 위크 2단계 제안서'));
+  ok('sidebar has no admin group for mice user', !(await kim.textContent('#nav')).includes('감사 로그'));
   await kim.hash('#/docs');
   await kim.click('#btn-new'); await kim.waitForSelector('dialog[open] #f-file');
   await kim.setInputFiles('#f-file', FILES + '/contract.md');
@@ -48,7 +48,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.getByRole('button', { name: '결재 요청' }).click(); await kim.waitForSelector('#ap-park');
   await kim.check('#ap-park'); await kim.dlg().getByRole('button', { name: '요청', exact: true }).click();
   await kim.waitForSelector('.step');
-  ok('approval request shows pending step for park', (await kim.textContent('.steps')).includes('박재무') && (await kim.textContent('.steps')).includes('처리 대기'));
+  ok('approval request shows pending step for park', (await kim.textContent('.steps')).includes('박재정') && (await kim.textContent('.steps')).includes('처리 대기'));
   ok('requester sees no approve button', (await kim.$$('button:has-text("승인")')).length === 0);
 
   // ===== park: task list, approve =====
@@ -103,8 +103,8 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   // ===== related documents, download restriction, image preview =====
   await kim.click('.tabs button:has-text("개요")'); await kim.waitForSelector('#rel-add');
   await kim.fill('#rel-add', 'GEN-2026-0004'); await kim.click('#rel-go');
-  await kim.waitForFunction(() => document.querySelector('#view')?.textContent.includes('GEN-2026-0004 2026 영업 계획'), null, { timeout: 5000 }).catch(() => {});
-  ok('related document is linked', (await kim.textContent('#view')).includes('GEN-2026-0004 2026 영업 계획'));
+  await kim.waitForFunction(() => document.querySelector('#view')?.textContent.includes('GEN-2026-0004 2026 유치 계획'), null, { timeout: 5000 }).catch(() => {});
+  ok('related document is linked', (await kim.textContent('#view')).includes('GEN-2026-0004 2026 유치 계획'));
   ok('download button available before restriction', (await kim.$$('.page-h ~ .row button:has-text("다운로드")')).length >= 1);
   await kim.getByRole('button', { name: '정보 편집' }).click(); await kim.waitForSelector('#m-nodl');
   await kim.check('#m-nodl'); await kim.dlg().getByRole('button', { name: '저장' }).click();
@@ -121,7 +121,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.goto(docUrl); await kim.waitForSelector('.tabs');
 
   // ===== search / facets / highlight / saved search =====
-  await kim.hash('#/docs?q=' + encodeURIComponent('영업 계획'));
+  await kim.hash('#/docs?q=' + encodeURIComponent('유치 계획'));
   ok('search highlights matches with <mark>', (await kim.$$('.snip mark')).length > 0);
   await kim.hash('#/docs'); await kim.waitForSelector('.chip');
   await kim.locator('.chip', { hasText: '계약서' }).first().click(); await kim.waitForTimeout(500);
@@ -153,7 +153,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   ok('restore works', (await toastText(kim)).includes('복원했습니다'));
 
   // ===== external share link =====
-  await kim.hash('#/docs?q=' + encodeURIComponent('2026 영업 계획')); await kim.waitForSelector('.tbl tbody tr');
+  await kim.hash('#/docs?q=' + encodeURIComponent('2026 유치 계획')); await kim.waitForSelector('.tbl tbody tr');
   await kim.locator('.tbl tbody tr', { hasText: 'GEN-' }).first().click(); await kim.waitForSelector('.tabs');
   await kim.click('.tabs button:has-text("외부 공유")'); await kim.waitForSelector('#sh-create');
   await kim.fill('#sh-pw', 'e2e-secret-pw'); await kim.selectOption('#sh-perm', 'download'); await kim.click('#sh-create');
@@ -168,18 +168,18 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await anon.fill('#pw-input', 'wrong-pass'); await anon.click('#pw-form button'); await anon.waitForTimeout(500);
   ok('wrong password is rejected', (await anon.textContent('#err')).includes('비밀번호'));
   await anon.fill('#pw-input', 'e2e-secret-pw'); await anon.click('#pw-form button'); await anon.waitForSelector('#doc:not([hidden])');
-  ok('correct password shows the document', (await anon.textContent('#title')).includes('영업 계획'));
+  ok('correct password shows the document', (await anon.textContent('#title')).includes('유치 계획'));
   // Chromium's suggestedFilename() ignores non-ASCII names in headless mode, so assert on what the app controls: the anchor's download attribute
   await anon.evaluate(() => { const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { window.__dl = this.getAttribute('download'); return o.call(this); }; });
   await Promise.all([anon.waitForEvent('download'), anon.click('#dl')]);
-  ok('anonymous download works with the real file name', (await anon.evaluate(() => window.__dl)) === '영업계획.md');
+  ok('anonymous download works with the real file name', (await anon.evaluate(() => window.__dl)) === '유치계획.md');
   await kim.click('.tabs button:has-text("외부 공유")'); await kim.waitForSelector('.tbl');
   await kim.getByRole('button', { name: '폐지' }).first().click(); await kim.waitForTimeout(700);
   await anon.reload(); await anon.waitForSelector('#err:not(:empty)');
   ok('revoked link says it is invalid', (await anon.textContent('#err')).includes('올바르지 않거나'));
 
   // ===== AI chat links back to the document =====
-  await kim.hash('#/chat'); await kim.fill('#q', '2026 영업 계획 목표 계약 건수'); await kim.click('#send'); await kim.waitForSelector('.a');
+  await kim.hash('#/chat'); await kim.fill('#q', '2026 유치 계획 목표 계약 건수'); await kim.click('#send'); await kim.waitForSelector('.a');
   await kim.click('.a summary'); await kim.waitForTimeout(300);
   ok('AI answer cites a managed document with an open-link', (await kim.$$('.ev .link')).length >= 1);
 

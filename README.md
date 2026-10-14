@@ -1,6 +1,6 @@
 # EDM-AI — 문서중앙화(EDM)를 AI 지식 플랫폼으로
 
-문서·이메일·도면(비정형)과 업무 DB(정형)를 **하나의 권한 모델**로 묶어, AI가 **근거를 인용**해 답하게 하는 참조 구현입니다.
+문서·이메일·배치도(비정형)과 업무 DB(정형)를 **하나의 권한 모델**로 묶어, AI가 **근거를 인용**해 답하게 하는 참조 구현입니다.
 **외부 의존성 0 (Python 표준 라이브러리만)** — 온프레미스·폐쇄망에 그대로 반입할 수 있습니다.
 
 ## 빠른 시작
@@ -18,15 +18,15 @@
 개별 명령:
 ```bash
 python3 examples/demo/build_demo.py                      # 데모 ERP DB 생성 + 문서 수집
-python3 -m edm_ai.cli -c examples/demo/config.json ask -u kim  "한빛전자 MES 계약 금액과 납기 지연 이슈는?"
-python3 -m edm_ai.cli -c examples/demo/config.json ask -u park "한빛전자 MES 계약 금액과 납기 지연 이슈는?"   # 재무: 마진율·원가문서·청구까지
+python3 -m edm_ai.cli -c examples/demo/config.json ask -u kim  "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"
+python3 -m edm_ai.cli -c examples/demo/config.json ask -u park "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"   # 재무: 마진율·원가문서·청구까지
 python3 -m edm_ai.cli -c examples/demo/config.json serve --demo-login   # http://127.0.0.1:8787
 python3 -m unittest discover -s tests
 python3 -m edm_ai.cli -c examples/demo/config.json eval examples/demo/golden.json   # 정확도 + 권한 누출(0이어야 함) 평가
 EDM_AI_SECRET=<16자 이상> python3 -m edm_ai.cli -c cfg.json token -u kim            # 서명 토큰 (auth.mode=token)
 python3 -m edm_ai.cli -c cfg.json verify-audit                                      # 감사 로그 변조 검증
 ```
-같은 질문도 사용자(`kim` 영업 / `park` 재무 / `lee` 인사 / `choi` 외부)에 따라 **보이는 문서·행·컬럼이 달라집니다.**
+같은 질문도 사용자(`kim` MICE유치 / `park` 경영지원 / `lee` 인사 / `choi` 외부)에 따라 **보이는 문서·행·컬럼이 달라집니다.**
 
 ## VS Code에서 열기
 1. VS Code로 `volunteer-match` 폴더를 열고, 오른쪽 아래 "권장 확장 설치" 알림에서 Python 확장을 설치합니다.
@@ -102,5 +102,5 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 - Oracle은 따옴표 식별자(대소문자 구분)를 쓰므로 설정의 테이블/컬럼명을 저장된 그대로(보통 대문자) 적어야 합니다(`examples/demo/config.oracle.json`, `deploy/oracle/seed.sql` 참고). 서버 측 읽기 전용은 `SET TRANSACTION READ ONLY`로 강제됩니다.
 - 관련도 관문(`retrieval.min_coverage`, 기본 0.2): 질문 토큰의 20% 미만만 겹치는 문서는 근거로 쓰지 않습니다. 코퍼스에 맞춰 `eval`로 조정하세요.
 - `auth.mode=header`는 인증 프록시 뒤에서만 쓰세요(클라이언트 헤더를 신뢰). 직접 노출 시 `token` 모드. `--demo-login`은 데모 전용.
-- PDF/Office/도면(DWG) 변환기와 OCR은 `ingest.read_file`에 추가하는 구조입니다.
+- PDF/Office/배치도(DWG) 변환기와 OCR은 `ingest.read_file`에 추가하는 구조입니다.
 - 문서 내 프롬프트 인젝션은 "증거=데이터" 프롬프트와 인용 검증으로 완화할 뿐 완전 차단은 아닙니다. 권한 경계는 LLM이 아니라 검색·게이트웨이 계층에서 강제합니다.

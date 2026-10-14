@@ -127,7 +127,7 @@ class Lifecycle(HttpBase):
         self.assertEqual(h["Content-Type"], "text/csv")
 
     def test_folders_and_bulk_export(self):
-        f = self.call("POST", "/api/dms/folders", "admin", {"parent_id": None, "name": "HTTP폴더", "entries": [{"type": "dept", "id": "sales", "role": "editor"}]})[1]
+        f = self.call("POST", "/api/dms/folders", "admin", {"parent_id": None, "name": "HTTP폴더", "entries": [{"type": "dept", "id": "mice", "role": "editor"}]})[1]
         a = self.reg(folder_id=f["id"], text="# a\n\nbulk http a.")
         b = self.reg(folder_id=f["id"], text="# b\n\nbulk http b.")
         tree = self.call("GET", "/api/dms/folders", "kim")[1]

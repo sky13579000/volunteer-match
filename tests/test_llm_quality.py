@@ -58,11 +58,11 @@ class Grounding(unittest.TestCase):
 
     def test_engine_rejects_llm_that_invents_a_figure(self):
         s = DocumentStore()
-        s.upsert("a.md", "계약", Acl(), [("한빛 계약금액은 4억 8천만원이다 납기 안내", frozenset())], "x")
+        s.upsert("a.md", "계약", Acl(), [("제주 계약금액은 4억 8천만원이다 납기 안내", frozenset())], "x")
         for reply, want in (("계약금액은 5억원입니다 [E1]", "extractive"), ("계약금액은 480,000,000원입니다 [E1]", "llm")):
             srv, url = serve(fixed_chat(reply))
             try:
-                ans = Engine(s, None, EntityExtractor(), OpenAICompatClient(url, "m")).ask(Principal("u"), "한빛 계약금액")
+                ans = Engine(s, None, EntityExtractor(), OpenAICompatClient(url, "m")).ask(Principal("u"), "제주 계약금액")
             finally:
                 srv.shutdown()
                 srv.server_close()
@@ -147,7 +147,7 @@ class EvalQuality(unittest.TestCase):
 
     def test_must_not_contain_counts_as_leak(self):
         g = Path(self.tmp.name) / "g.json"
-        g.write_text(json.dumps([{"user": "park", "question": "한빛전자 계약금액", "must_not_contain": ["한빛전자"]}]), "utf-8")
+        g.write_text(json.dumps([{"user": "park", "question": "제주관광공사 계약금액", "must_not_contain": ["제주관광공사"]}]), "utf-8")
         self.app.engine.llm = None
         r = run_eval(self.app, g)
         self.assertEqual(r["leaks"], 1)

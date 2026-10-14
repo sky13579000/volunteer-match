@@ -54,7 +54,7 @@ def run_demo(args):
     bar = "=" * 66
     print(f"\n{bar}\n  EDM-AI v{__version__}  문서중앙화 + AI  (폴더·버전·결재·보존·공유·감사)\n"
           f"  이 주소를 여세요  ->  {url}\n{stale}"
-          f"  상단에서 김영업(영업) / 박재무(재무) / 최협력(외부) 를 바꿔 보세요.  종료: Ctrl+C\n{bar}\n")
+          f"  상단에서 김유치(MICE유치) / 박재정(경영지원) / 최협력(외부) 를 바꿔 보세요.  종료: Ctrl+C\n{bar}\n")
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     from .server import serve
