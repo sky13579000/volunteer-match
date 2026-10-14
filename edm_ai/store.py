@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS disposal_items(
 CREATE TABLE IF NOT EXISTS disposal_ledger(
   id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
   retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS api_keys(
+  id INTEGER PRIMARY KEY, name TEXT, user_id TEXT, key_hash TEXT UNIQUE, prefix TEXT, scope TEXT DEFAULT 'read',
+  created_by TEXT, created TEXT, expires TEXT, last_used TEXT, revoked INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS follows(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));

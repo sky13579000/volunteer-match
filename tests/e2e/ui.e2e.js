@@ -299,6 +299,18 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.hash('#/records?tab=privacy'); await ad2.waitForSelector('.tbl');
   ok('privacy overview shows the finding without a readable title for the administrator', (await ad2.textContent('#view')).includes('주민등록번호'));
 
+  // ===== integrations: API keys =====
+  await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
+  await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');
+  const keyText = await ad2.textContent('#key-once');
+  ok('API key is shown once with the edmk_ prefix', keyText.startsWith('edmk_'));
+  const viaKey = await ad2.evaluate(async (k) => (await fetch('/api/me', { headers: { Authorization: 'Bearer ' + k } })).json(), keyText);
+  ok('the key authenticates as its user', viaKey.id === 'kim');
+  const adminViaKey = await ad2.evaluate(async (k) => (await fetch('/api/dms/admin/api-keys', { headers: { Authorization: 'Bearer ' + k } })).status, keyText);
+  ok('the key cannot reach the admin API', adminViaKey === 403);
+  await ad2.dlg().getByRole('button', { name: '닫기' }).click(); await ad2.waitForSelector('.tbl');
+  ok('key list shows the new key without its secret', (await ad2.textContent('#view')).includes('e2e 시험 연동') && !(await ad2.textContent('#view')).includes(keyText));
+
   // ===== responsive + dark =====
   const mob = await login('kim', { viewport: { width: 400, height: 800 } });
   for (const h of ['#/dashboard', '#/docs', '#/tasks']) {

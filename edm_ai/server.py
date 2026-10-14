@@ -94,7 +94,18 @@ def make_handler(app: App, demo_login: bool):
             except Exception:
                 raise DmsError(400, "bad request")
 
+        _key = None
+
         def _user(self):
+            self._key = None
+            hdr = self.headers.get("Authorization", "")
+            if hdr.startswith("Bearer edmk_"):                           # integration API key (any auth mode): acts as one user, limited scope
+                with lock:
+                    res = dms.resolve_api_key(hdr[7:].strip())
+                if not res:
+                    return None
+                self._key = (res[1], res[2])
+                return res[0]
             if acfg["mode"] == "token":
                 tok = self.headers.get("Authorization", "")
                 return app.users.get(auth.verify(secret, tok[7:]) or "") if tok.startswith("Bearer ") else None
@@ -111,6 +122,9 @@ def make_handler(app: App, demo_login: bool):
                 return app.users.get(v)
             # header mode: ONLY behind an authenticating proxy (SSO/mTLS) that strips client-supplied copies.
             return app.users.get(self.headers.get(acfg.get("header", "X-User-Id"), ""))
+
+        def _rid(self, u):
+            return f"key:{self._key[1]}" if self._key else u.id
 
         def _limited(self, key, cap=None):
             now, q = time.time(), hits[key]
@@ -179,6 +193,11 @@ def make_handler(app: App, demo_login: bool):
             u = self._user()
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
+            if self._key:
+                if path.startswith("/api/dms/admin") or path.startswith("/api/audit"):
+                    return self._send(403, {"error": "API 키로는 관리 기능을 사용할 수 없습니다"})
+                if self._key[0] == "read" and method != "GET" and path != "/api/ask":
+                    return self._send(403, {"error": "조회 전용 API 키입니다"})
             if method == "GET" and path == "/api/me":
                 return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles,
                                             "is_records": "admin" in u.roles or "records" in u.roles})
@@ -189,7 +208,7 @@ def make_handler(app: App, demo_login: bool):
                     ok, bad = app.store.verify_audit()
                     return self._send(200, {"chain_ok": ok, "first_bad_id": bad, "entries": app.store.audit_log()})
             if method == "POST" and path == "/api/ask":
-                if self._limited(u.id):
+                if self._limited(self._rid(u)):
                     return self._send(429, {"error": "rate limited"})
                 b = self.body(65536)
                 q = str(b.get("question", "")).strip()
@@ -205,7 +224,7 @@ def make_handler(app: App, demo_login: bool):
             for meth, rx, fn, mutating in routes:
                 m = rx.fullmatch(path)
                 if meth == method and m:
-                    if mutating and self._limited(u.id):
+                    if mutating and self._limited(self._rid(u)):
                         return self._send(429, {"error": "rate limited"})
                     with lock:
                         result = fn(self, u, m, qs)

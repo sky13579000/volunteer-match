@@ -158,6 +158,8 @@ class WorkflowMixin:
             self.x("UPDATE dms_docs SET status=CASE WHEN effective_ver IS NULL THEN 'rejected' ELSE 'approved' END, updated=? WHERE id=?", (ts, doc_id))
         row = self.row(doc_id)
         self.reindex(row)
+        if outcome == "approved":
+            self.app.events.emit("doc.approved", row, actor.id, f"v{w['ver']}")
         label = "승인" if outcome == "approved" else "반려"
         self.notify(w["requester"], outcome, doc_id, f"{label}: {row['title']} ({row['doc_no']})" + (f" — {note}" if note else ""), exclude=actor.id)
         if row["owner"] != w["requester"]:

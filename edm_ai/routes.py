@@ -412,6 +412,30 @@ def build_routes(app):
     def _ledger_csv(req, u, m, qs):
         return Raw(d.disposal_ledger_csv(u).encode("utf-8"), "disposal-ledger.csv", "text/csv")
 
+    @route("GET", r"/api/dms/admin/api-keys")
+    def _keys(req, u, m, qs):
+        return {"items": d.list_api_keys(u), "scopes": {"read": "조회 전용", "write": "조회 + 등록·수정"}}
+
+    @route("POST", r"/api/dms/admin/api-keys")
+    def _key_new(req, u, m, qs):
+        b = req.body(4096)
+        return d.create_api_key(u, b.get("name"), b.get("user"), b.get("scope", "read"), b.get("days", 90))
+
+    @route("DELETE", r"/api/dms/admin/api-keys/(\d+)")
+    def _key_del(req, u, m, qs):
+        return d.revoke_api_key(u, i(m))
+
+    @route("GET", r"/api/dms/admin/webhooks")
+    def _hooks(req, u, m, qs):
+        d._need_admin(u)
+        return app.events.status()
+
+    @route("POST", r"/api/dms/admin/webhooks/test")
+    def _hook_test(req, u, m, qs):
+        d._need_admin(u)
+        app.events.emit("ping", None, u.id, "연결 시험")
+        return {"queued": True}
+
     @route("GET", r"/api/dms/admin/users")
     def _admin_users(req, u, m, qs):
         return d.admin_users(u)

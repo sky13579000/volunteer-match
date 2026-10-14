@@ -48,6 +48,8 @@ class App:
         from .mailer import Mailer
         smtp = (self.cfg.get("notify") or {}).get("smtp")
         self.mailer = Mailer(smtp, self.cfg.get("notify", {}).get("base_url", "")) if smtp else None
+        from .events import Events
+        self.events = Events(self.cfg.get("events") or {})
         dcfg = self.cfg.get("dms", {})
         repo = self._p(dcfg["repo"]) if dcfg.get("repo") else Path(store_path).resolve().parent / "repo"
         self.dms = Dms(self, repo)

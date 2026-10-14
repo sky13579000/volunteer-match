@@ -15,6 +15,7 @@ from .errors import DmsError
 from .ingest import SUPPORTED, read_file
 from .models import Acl
 from .safety import redact_pii
+from .events import EVENT_OF_ACTION
 from .store import MANAGED_PREFIX
 
 FOLLOW_TEXT = {"new_version": "새 버전이 올라왔습니다", "restored": "이전 버전이 복원되었습니다", "approved_step": "결재가 진행되었습니다", "rejected": "결재가 반려되었습니다",
@@ -479,6 +480,9 @@ class DmsCore:
         self.store.log_audit(uid, f"[{action}] {row['doc_no'] or row['source']}", [row["source"]], False, "dms")
         if action in FOLLOW_TEXT and row["origin"] == "managed":
             self.notify_followers(row, FOLLOW_TEXT[action], uid)
+        ev = EVENT_OF_ACTION.get(action)
+        if ev and row.get("origin") == "managed":
+            self.app.events.emit(ev, row, uid, detail)
 
     # ---------------- summaries ----------------
     def summary(self, p, row, with_perms=True) -> dict:

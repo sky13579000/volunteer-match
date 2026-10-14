@@ -282,6 +282,7 @@ class RecordsMixin:
             done += 1
         self.x("UPDATE disposals SET status='approved', decided_by=?, decided_at=?, note=? WHERE id=?", (p.id, now(), note, d["id"]))
         self.notify(d["requested_by"], "disposal_result", None, f"폐기 심의 #{d['id']} 승인: {done}건 폐기, {skipped}건 제외")
+        self.app.events.emit("disposal.completed", None, p.id, f"#{d['id']} 폐기 {done}건, 제외 {skipped}건")
         self.store.log_audit(p.id, f"[폐기 승인] #{d['id']} {done}건 폐기, {skipped}건 제외", [], False, "dms")
         return {"id": d["id"], "status": "approved", "disposed": done, "skipped": skipped}
 
