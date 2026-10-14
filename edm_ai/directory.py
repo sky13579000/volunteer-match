@@ -24,6 +24,7 @@ DEFAULT_MAP = {
     "title_levels": {},      # job title -> security level, e.g. {"팀장": 3, "과장": 2}
     "default_level": 1,
     "max_level": 3,          # levels above this can only be set by hand (admin-level 99 is never granted by sync)
+    "external_fields": {},   # extra identities for adapters, e.g. {"empno": "사번"} -> users.json external.empno
     "multi_sep": ";",
     "id_from_email": False,  # derive the id from the e-mail local part when the id column is empty
     "preserve": [],          # ids that sync never touches (admins, service accounts)
@@ -129,6 +130,9 @@ def to_users(rows: list[dict], m: dict) -> tuple[list[dict], list[str]]:
             ext["email"] = email
         if r.get(f["slack"]):
             ext["slack"] = r[f["slack"]]
+        for key, col in m["external_fields"].items():
+            if r.get(col):
+                ext[key] = r[col]
         if ext:
             u["external"] = ext
         users.append(u)

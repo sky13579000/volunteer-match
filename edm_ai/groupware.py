@@ -55,7 +55,59 @@ def _line(approval_line) -> str:
     return "; ".join(f"{a.get('name', '?')}({a.get('title', '')}) {a.get('result', '')} {a.get('at', '')}".strip() for a in approval_line[:20] if isinstance(a, dict))
 
 
+def _get(obj, path: str):
+    """'a.b.0.c' -> obj['a']['b'][0]['c'] (None when anything is missing)."""
+    for part in str(path).split("."):
+        if isinstance(obj, list):
+            try:
+                obj = obj[int(part)]
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(obj, dict):
+            obj = obj.get(part)
+        else:
+            return None
+    return obj
+
+
+def normalize(cfg: dict, body: dict) -> dict:
+    """Adapt ANY groupware JSON to the canonical message through `field_map` (no code needed per groupware product).
+
+      "field_map": {"doc_id": "approval.docNo", "form": "approval.formName", "title": "approval.subject",
+                    "owner_email": "drafter.email", "owner_id": "drafter.empNo",
+                    "approved": {"path": "approval.status", "equals": ["완료", "COMPLETE"]},
+                    "approval_line": "approval.line", "tags": "approval.tags", "expires_at": "approval.expireDate",
+                    "files": {"path": "attachments", "filename": "fileName", "content_b64": "fileData"}}
+    """
+    fm = cfg.get("field_map")
+    if not fm:
+        return body
+    out = dict(body)
+    for key in ("doc_id", "form", "title", "approval_line", "tags", "expires_at", "description", "level", "props"):
+        if key in fm:
+            v = _get(body, fm[key])
+            if v is not None:
+                out[key] = v
+    if "owner_email" in fm and _get(body, fm["owner_email"]):
+        out["owner"] = {"type": "email", "id": str(_get(body, fm["owner_email"]))}
+    elif "owner_id" in fm and _get(body, fm["owner_id"]):
+        out["owner"] = {"type": cfg.get("owner_id_type", "empno"), "id": str(_get(body, fm["owner_id"]))}
+    if isinstance(fm.get("approved"), dict):
+        v = _get(body, fm["approved"].get("path", ""))
+        eq = fm["approved"].get("equals", [])
+        out["approved"] = v in (eq if isinstance(eq, list) else [eq])
+    elif "approved" in fm:
+        out["approved"] = bool(_get(body, fm["approved"]))
+    if isinstance(fm.get("files"), dict):
+        spec = fm["files"]
+        items = _get(body, spec.get("path", "")) or []
+        out["files"] = [{"filename": _get(i, spec.get("filename", "filename")), "content_b64": _get(i, spec.get("content_b64", "content_b64"))}
+                        for i in items if isinstance(i, dict)]
+    return out
+
+
 def ingest(app, cfg: dict, body: dict) -> dict:
+    body = normalize(cfg, body)
     d = app.dms
     gw_id = str(body.get("doc_id") or "").strip()
     if not gw_id or len(gw_id) > 100:

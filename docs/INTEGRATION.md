@@ -59,6 +59,36 @@ curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H 
 - 응답: `{"ok":true,"results":[{"index":0,"status":"created|updated|unchanged|error","id":..,"doc_no":..}]}` (일부 실패 시 207).
 - **미구현**: 특정 그룹웨어 제품(더존/한컴/다우 등)용 전용 커넥터. 그룹웨어의 "결재 완료 후 외부 URL 호출"(또는 ESB)로 위 JSON 을 만들어 보내도록 설정/개발해야 합니다.
 
+## 4. 더존 BIZBOX ALPHA 와 연동하기
+> **솔직한 현황**: BIZBOX ALPHA 의 외부 연동 사양(API·웹훅·SSO·문서 연계)은 공개 자료에서 확인하지 못했습니다. 그래서 *특정 API 를 가정한 코드는 넣지 않았고*, 더존/파트너가 제공하는 어떤 방식이든 붙일 수 있게 **받는 쪽을 범용으로** 만들었습니다. 실제 방식은 아래 질문을 더존(또는 구축 파트너)에 확인해 결정하세요.
+
+**더존/파트너에 확인할 것**
+1. 전자결재 **최종 승인 시점에 외부 URL 을 호출**(웹훅/연계 모듈)할 수 있는가? 보낼 수 있는 JSON/XML 항목(문서번호, 양식명, 제목, 기안자 사번/이메일, 상태, 결재선, 첨부)은?
+2. 첨부파일을 본문에 실어 보내는가, 다운로드 URL(인증 필요)을 주는가? 최대 크기는?
+3. 요청에 **HMAC 서명 헤더**를 붙일 수 있는가? (불가하면 아래 *중계 방식*)
+4. 조직도·사용자를 **엑셀/CSV 로 내보내기** 또는 DB 뷰로 제공받을 수 있는가? 사번/이메일 컬럼명은?
+5. **SSO**: BIZBOX ALPHA 가 IdP 역할(OIDC/SAML)을 지원하는가, 아니면 AD/LDAP 연동인가?
+6. 온프레미스인가 클라우드인가? 서버 간 통신(방화벽) 허용 범위는?
+
+**연동 방식(상황별)**
+| 상황 | 방법 |
+|---|---|
+| 결재 완료 시 외부 URL 호출 가능 + JSON 항목 제공 | `adapters.groupware.field_map` 으로 *그들의 항목명*을 매핑 (코드 변경 없음) |
+| 호출은 되지만 서명 불가 | 같은 망에 **작은 중계 서버**(`examples/groupware/send_example.py` 의 `send()` 사용)를 두고, 더존 → 중계(내부 IP 제한) → 서명해서 플랫폼 호출 |
+| 호출 불가, 파일/DB 만 제공 | 정해진 시각에 폴더로 내려받은 파일을 **일괄 등록**(`/api/dms/import-zip`) 또는 폴더 수집(`docs.root`)으로 가져오기 |
+| 사용자 정보 | 엑셀/CSV → `sync-users` (`external_fields` 로 사번 등 추가 식별자 연결) |
+| 로그인 | OIDC/SAML 지원 시 `proxy` 모드, 미지원이면 AD/LDAP 기반 SSO 프록시 또는 플랫폼 자체 토큰 |
+
+**`field_map` 예시** (더존이 아래와 비슷한 JSON 을 보낸다고 가정한 *예시*이며 실제 항목명은 확인 후 바꾸세요)
+```json
+"groupware": {"secret_env": "EDM_AI_GW_SECRET", "owner_id_type": "empno",
+  "field_map": {"doc_id": "approval.docNo", "form": "approval.formName", "title": "approval.subject", "owner_id": "drafter.empNo",
+                "approved": {"path": "approval.status", "equals": ["완료"]}, "approval_line": "approval.line",
+                "files": {"path": "attachments", "filename": "fileName", "content_b64": "fileData"}},
+  "routes": [{"form": "계약품의", "folder": "MICE유치팀", "doc_type": "CT"}]}
+```
+사번으로 기안자를 찾으려면 `sync-users` 매핑에 `"external_fields": {"empno": "사번"}` 를 두세요. 단점/주의: 첨부가 base64 로 안 오는 경우(URL 방식)는 현재 직접 내려받지 않으므로 중계 서버에서 받아 넣어 주어야 합니다.
+
 ## 점검 체크리스트
 1. 조직도 동기화 미리보기 → 경고(미매핑 부서/등급 상한) 해소 → `--apply`
 2. SSO: 한 명의 이메일로 로그인 → `/api/me` 확인 → 등록 안 된 계정은 401 확인

@@ -119,6 +119,14 @@ class DirectoryTest(unittest.TestCase):
         self.assertEqual(users["han"]["roles"], ["finance", "hr"])
         self.assertEqual(r["added"], ["han"])
 
+    def test_external_fields_map_extra_identities(self):
+        m = json.loads(self.map.read_text("utf-8"))
+        m["external_fields"] = {"empno": "사번"}
+        self.map.write_text(json.dumps(m, ensure_ascii=False), "utf-8")
+        self.run_sync(apply=True)
+        users = {u["id"]: u for u in json.loads(self.users.read_text("utf-8"))}
+        self.assertEqual(users["han"]["external"]["empno"], "han")
+
     def test_unknown_mapping_key_is_rejected(self):
         self.map.write_text('{"typo_key": 1}', "utf-8")
         with self.assertRaises(directory.DirectoryError):
@@ -252,6 +260,35 @@ class GroupwareTest(Base):
         h = {"X-EDM-Timestamp": ts, "X-EDM-Signature": adapters.webhook_sign(GW, ts, body)}
         self.assertEqual(self.req("/api/adapters/groupware", body, h, "POST")[0], 200)
         self.assertEqual(self.req("/api/adapters/groupware", body, h, "POST")[0], 409)
+
+
+class FieldMapTest(GroupwareTest):
+    """A groupware that sends its OWN JSON shape works through `field_map` alone."""
+
+    def test_foreign_payload_shape(self):
+        gw = self.app.cfg["adapters"]["groupware"]
+        gw["field_map"] = {"doc_id": "approval.docNo", "form": "approval.formName", "title": "approval.subject", "owner_id": "drafter.empNo",
+                           "approved": {"path": "approval.status", "equals": ["완료", "COMPLETE"]}, "approval_line": "approval.line",
+                           "files": {"path": "attachments", "filename": "fileName", "content_b64": "fileData"}}
+        gw["owner_id_type"] = "empno"
+        users = self.app.users
+        self.assertIn("kim", users)
+        self.app.external[("empno", "E1001")] = "kim"            # normally from users.json: "external": {"empno": "E1001"}
+        foreign = {"approval": {"docNo": "BZ-2026-77", "formName": "계약품의", "subject": "비즈박스 품의서", "status": "완료",
+                                "line": [{"name": "박재정", "title": "팀장", "result": "승인"}]},
+                   "drafter": {"empNo": "E1001"}, "attachments": [{"fileName": "b.md", "fileData": b64("# 비즈박스\n\n외부형식매핑유니크")}]}
+        try:
+            c, r = self.send(foreign)
+            self.assertEqual((c, r["results"][0]["status"]), (200, "created"))
+            row = self.app.dms.row(r["results"][0]["id"])
+            self.assertEqual((row["owner"], row["status"], row["title"], row["props"]["gw_doc_id"]), ("kim", "approved", "비즈박스 품의서", "BZ-2026-77"))
+            foreign["approval"]["status"] = "진행중"
+            foreign["approval"]["docNo"] = "BZ-2026-78"
+            c, r = self.send(foreign, ts=str(int(time.time()) + 1))
+            self.assertEqual(self.app.dms.row(r["results"][0]["id"])["status"], "draft")        # not finished in the groupware -> not effective
+        finally:
+            gw.pop("field_map")
+            self.app.external.pop(("empno", "E1001"), None)
 
 
 class ProxyAuthTest(Base):
