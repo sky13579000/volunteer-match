@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS dms_docs(
   level INTEGER DEFAULT 0, inherit INTEGER DEFAULT 1, entries TEXT DEFAULT '[]',
   approved_at TEXT, retention_until TEXT, legal_hold INTEGER DEFAULT 0,
   expires_at TEXT, expire_notified INTEGER DEFAULT 0,
-  locked_by TEXT, locked_at TEXT, deleted_at TEXT, deleted_by TEXT, deleted_folder INTEGER);
+  locked_by TEXT, locked_at TEXT, deleted_at TEXT, deleted_by TEXT, deleted_folder INTEGER, class_code TEXT);
 CREATE INDEX IF NOT EXISTS ix_dms_folder ON dms_docs(folder_id);
 CREATE TABLE IF NOT EXISTS dms_versions(
   id INTEGER PRIMARY KEY, doc_id INTEGER, ver INTEGER, filename TEXT, size INTEGER, sha256 TEXT,
@@ -66,6 +66,19 @@ CREATE TABLE IF NOT EXISTS access_requests(
   id INTEGER PRIMARY KEY, doc_id INTEGER, requester TEXT, role TEXT, reason TEXT DEFAULT '', status TEXT DEFAULT 'pending',
   decided_by TEXT, decided_at TEXT, note TEXT DEFAULT '', created TEXT, ref TEXT);
 CREATE INDEX IF NOT EXISTS ix_access_status ON access_requests(status, requester);
+CREATE TABLE IF NOT EXISTS classifications(
+  code TEXT PRIMARY KEY, name TEXT NOT NULL, parent TEXT, retention_years INTEGER DEFAULT 0, description TEXT DEFAULT '', active INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS dlp_findings(
+  doc_id INTEGER, ver INTEGER, kind TEXT, n INTEGER, ts TEXT, PRIMARY KEY(doc_id, ver, kind));
+CREATE TABLE IF NOT EXISTS disposals(
+  id INTEGER PRIMARY KEY, status TEXT DEFAULT 'pending', reason TEXT DEFAULT '', requested_by TEXT, requested_at TEXT,
+  decided_by TEXT, decided_at TEXT, note TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS disposal_items(
+  id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT,
+  owner TEXT, retention_until TEXT, doc_updated TEXT, result TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS disposal_ledger(
+  id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
+  retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS follows(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
@@ -123,6 +136,10 @@ class DocumentStore:
 
     def _migrate(self):
         """v0.1 -> v0.2: audit gains prev/hash. Legacy rows are chained retroactively (tamper evidence starts now)."""
+        dcols = {r[1] for r in self.db.execute("PRAGMA table_info(dms_docs)")}
+        if dcols and "class_code" not in dcols:
+            with self.db:
+                self.db.execute("ALTER TABLE dms_docs ADD COLUMN class_code TEXT")
         fcols = {r[1] for r in self.db.execute("PRAGMA table_info(folders)")}
         if fcols and "open_create" not in fcols:
             with self.db:

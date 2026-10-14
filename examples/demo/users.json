@@ -56,6 +56,16 @@
     "email": "choi@partner.example"
   },
   {
+    "id": "rec",
+    "name": "서기록",
+    "dept": "ops",
+    "roles": [
+      "records"
+    ],
+    "level": 3,
+    "email": "rec@iccjeju.example"
+  },
+  {
     "id": "admin",
     "name": "관리자",
     "dept": "it",

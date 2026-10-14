@@ -59,7 +59,10 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
   const alerts = d.analysis?.findings || [];
   const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, history: historyTab }[tab] || infoTab;
   const panel = el("div", { role: "tabpanel" });
-  view.replaceChildren(head,
+  const priv = d.privacy?.findings?.length ? el("div", { class: "card privacy-banner sec" }, icon("shield", 20), el("div", {}, el("b", {}, "개인정보가 포함된 것으로 검출되었습니다"),
+    el("div", { class: "chips" }, d.privacy.findings.map((f) => pill(`${f.label} ${f.count}건`, f.severity === "high" ? "bad" : f.severity === "medium" ? "warn" : ""))),
+    el("div", { class: "hint" }, `v${d.privacy.ver} 기준 · 값은 저장하지 않고 건수만 기록합니다. 불필요하면 삭제하거나 가린 새 버전을 올리고, 필요하면 보안등급·다운로드 제한을 지정하세요.`))) : "";
+  view.replaceChildren(head, priv,
     alerts.length ? el("div", { class: "card sec" }, el("b", { class: "bad" }, `업무 DB와 불일치 ${alerts.length}건`), alerts.map((f) => el("p", { class: "flush" }, pill(f.severity === "high" ? "높음" : "중간", f.severity === "high" ? "bad" : "warn"), " " + f.message))) : "",
     el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share"))
       .map(([t, l]) => el("button", { role: "tab", "aria-selected": String(t === tab), onclick: () => goTab(t) }, l + (t === "comments" && d.comment_count ? ` (${d.comment_count})` : "")))),
@@ -128,18 +131,20 @@ async function moveDialog(d, reload) {
   return dialog("문서 이동", () => el("div", {}, field("대상 폴더", sel), el("p", { class: "hint" }, "이동하면 대상 폴더의 상속 권한이 적용되어 열람 가능한 사람이 바뀔 수 있습니다.")),
     [{ label: "취소", value: false }, { label: "이동", primary: true, run: async () => { await api(`/api/docs/${d.id}/move`, { method: "POST", body: { folder_id: Number(sel.value) } }); toast("이동했습니다"); reload(); } }]);
 }
-function metaDialog(d, reload) {
+async function metaDialog(d, reload) {
+  const classes = (await api("/api/dms/classifications")).items;
+  const cls = el("select", { id: "m-class", "aria-label": "기록물 분류" }, [el("option", { value: "" }, "(분류 없음)"), ...classes.map((c) => el("option", { value: c.code, selected: c.code === d.class_code }, `${c.code} ${c.name} · 보존 ${c.retention_years >= 99 ? "영구" : c.retention_years ? c.retention_years + "년" : "유형 기준"}`))]);
   const title = el("input", { id: "m-title", value: d.title }), tags = el("input", { id: "m-tags", value: d.tags.join(", ") }), desc = el("textarea", { id: "m-desc" }, d.description || "");
   const props = el("textarea", { id: "m-props", placeholder: "항목: 값 (한 줄에 하나)" }, Object.entries(d.props || {}).map(([k, v]) => `${k}: ${v}`).join("\n"));
   const exp = el("input", { type: "date", id: "m-exp", value: d.expires_at || "" });
   const nodl = el("input", { type: "checkbox", id: "m-nodl", checked: !!d.props?.no_download });
   props.value = Object.entries(d.props || {}).filter(([k]) => k !== "no_download").map(([k, v]) => `${k}: ${v}`).join("\n");
-  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 제주관광공사"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
+  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 제주관광공사"), field("기록물 분류", cls, "분류를 지정하면 보존기간이 문서유형 기준과 비교해 더 긴 쪽으로 적용됩니다"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
     el("label", { class: "inline" }, nodl, "다운로드 제한 (파일 반출·외부 공유 다운로드·ZIP 내보내기 차단. 화면 열람은 가능)")),
     [{ label: "취소", value: false }, { label: "저장", primary: true, run: async () => {
       const pr = {}; for (const line of props.value.split("\n")) { const i = line.indexOf(":"); if (i > 0) pr[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
       if (nodl.checked) pr.no_download = "1";
-      await api("/api/docs/" + d.id, { method: "PUT", body: { title: title.value, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value, props: pr, expires_at: exp.value || null } }); toast("저장했습니다"); reload(); } }]);
+      await api("/api/docs/" + d.id, { method: "PUT", body: { title: title.value, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value, props: pr, expires_at: exp.value || null, class_code: cls.value } }); toast("저장했습니다"); reload(); } }]);
 }
 
 // ---------- tabs ----------
@@ -150,9 +155,9 @@ function infoTab(d, reload) {
   add("문서번호", d.doc_no); add("유형", typeName(d.doc_type)); add("상태", statusPill(d.status)); add("폴더", d.folder_path); add("소유자", userName(d.owner)); add("등록", fmtDate(d.created)); add("수정", fmtDate(d.updated));
   add("보안등급", "L" + d.level); add("태그", d.tags.length ? el("span", {}, d.tags.map((t) => pill("#" + t))) : "-"); add("설명", d.description);
   for (const [k, v] of Object.entries(d.props || {})) add(k, v);
-  add("보존기간", d.retention_until ? `${d.retention_until} 까지 (이 기간에는 삭제할 수 없습니다)` : "없음"); add("만료일", d.expires_at || "없음");
+  add("기록물 분류", d.class_name ? `${d.class_code} ${d.class_name}` : "-"); add("보존기간", d.retention_until ? (d.retention_until.startsWith("9999") ? "영구 보존 (삭제 불가)" : `${d.retention_until} 까지 (이 기간에는 삭제할 수 없습니다)`) : "없음"); add("만료일", d.expires_at || "없음");
   const lifecycle = [];
-  if (d.origin === "managed" && can(d, "edit")) lifecycle.push(el("button", { class: "sm", onclick: () => metaDialog(d, reload) }, "정보 편집"));
+  if (d.origin === "managed" && can(d, "edit")) lifecycle.push(el("button", { class: "sm", onclick: () => metaDialog(d, reload).catch(fail) }, "정보 편집"));
   if (state.me.is_admin) lifecycle.push(el("button", { class: "sm " + (d.legal_hold ? "danger" : ""), onclick: async () => {
     const reason = el("input", { placeholder: "사유" });
     if (await dialog(d.legal_hold ? "법적 보류 해제" : "법적 보류 설정", () => field("사유", reason, "법적 보류 중에는 삭제·만료·영구삭제가 모두 차단됩니다"), [{ label: "취소", value: false }, { label: "확인", primary: true }])) {

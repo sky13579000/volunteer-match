@@ -145,7 +145,7 @@ def build_routes(app):
         return d.register(u, b.get("filename", ""), b64(b.get("content_b64")), folder_id=b.get("folder_id") or 1, title=b.get("title"),
                           doc_type=b.get("doc_type") or "GEN", tags=b.get("tags"), props=b.get("props"), description=b.get("description", ""),
                           level=b.get("level", 0), entries=b.get("entries"), inherit=b.get("inherit", True), expires_at=b.get("expires_at"),
-                          comment=b.get("comment", ""))
+                          comment=b.get("comment", ""), class_code=b.get("class_code") or None)
 
     @route("GET", r"/api/docs/(\d+)")
     def _get(req, u, m, qs):
@@ -154,7 +154,7 @@ def build_routes(app):
     @route("PUT", r"/api/docs/(\d+)")
     def _meta(req, u, m, qs):
         b = req.body(65536)
-        return d.update_meta(u, i(m), **{k: b[k] for k in ("title", "tags", "props", "description", "expires_at", "level") if k in b})
+        return d.update_meta(u, i(m), **{k: b[k] for k in ("title", "tags", "props", "description", "expires_at", "level", "class_code") if k in b})
 
     @route("DELETE", r"/api/docs/(\d+)")
     def _trash(req, u, m, qs):
@@ -364,6 +364,53 @@ def build_routes(app):
     def _report_csv(req, u, m, qs):
         sec = q1(qs, "section", "registrations")
         return Raw(d.report_csv(u, sec, q1(qs, "days", 90)).encode("utf-8"), f"report-{sec}.csv", "text/csv")
+
+    # ---- records management ----
+    @route("GET", r"/api/dms/classifications")
+    def _classes(req, u, m, qs):
+        return {"items": d.classifications(u, include_inactive=q1(qs, "all") == "1" and ("records" in u.roles or d.admin(u)))}
+
+    @route("PUT", r"/api/dms/admin/classifications")
+    def _class_save(req, u, m, qs):
+        return d.save_classification(u, req.body(8192))
+
+    @route("POST", r"/api/dms/admin/classifications/import")
+    def _class_import(req, u, m, qs):
+        return d.import_classifications(u, b64(req.body(2_000_000).get("content_b64")).decode("utf-8", "replace"))
+
+    @route("GET", r"/api/dms/admin/privacy")
+    def _privacy(req, u, m, qs):
+        return d.privacy_overview(u)
+
+    @route("POST", r"/api/dms/admin/privacy/scan")
+    def _privacy_scan(req, u, m, qs):
+        return d.privacy_scan_all(u)
+
+    @route("GET", r"/api/dms/disposal/candidates")
+    def _disp_cand(req, u, m, qs):
+        return {"items": d.disposal_candidates(u)}
+
+    @route("GET", r"/api/dms/disposal")
+    def _disp_list(req, u, m, qs):
+        return {"items": d.list_disposals(u)}
+
+    @route("POST", r"/api/dms/disposal")
+    def _disp_new(req, u, m, qs):
+        b = req.body(65536)
+        return d.request_disposal(u, b.get("ids"), b.get("reason"))
+
+    @route("POST", r"/api/dms/disposal/(\d+)/decide")
+    def _disp_decide(req, u, m, qs):
+        b = req.body(8192)
+        return d.decide_disposal(u, i(m), bool(b.get("approve")), b.get("note", ""))
+
+    @route("GET", r"/api/dms/disposal/ledger")
+    def _ledger(req, u, m, qs):
+        return {"items": d.disposal_ledger(u)}
+
+    @route("GET", r"/api/dms/disposal/ledger\.csv")
+    def _ledger_csv(req, u, m, qs):
+        return Raw(d.disposal_ledger_csv(u).encode("utf-8"), "disposal-ledger.csv", "text/csv")
 
     @route("GET", r"/api/dms/admin/users")
     def _admin_users(req, u, m, qs):

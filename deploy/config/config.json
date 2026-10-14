@@ -200,5 +200,21 @@
     "ops": "시설운영팀",
     "it": "정보시스템팀",
     "external": "외부 협력사"
+  },
+  "dlp": {
+    "mode": "warn",
+    "block_kinds": [
+      "rrn",
+      "alien",
+      "card",
+      "passport"
+    ],
+    "raise_to": 3,
+    "exempt_roles": [
+      "hr"
+    ]
+  },
+  "disposal": {
+    "allow_self_approval": false
   }
 }

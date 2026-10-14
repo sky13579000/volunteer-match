@@ -61,7 +61,7 @@ route(/^\/trash$/, async (view) => {
 route(/^\/notifications$/, async (view) => {
   const n = await api("/api/dms/notifications");
   const prefs = await api("/api/dms/prefs");
-  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"] };
+  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"] };
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }),
     prefs.email_available ? el("label", { class: "inline" }, el("input", { type: "checkbox", id: "pref-email", checked: prefs.email, onchange: async (e) => { try { await api("/api/dms/prefs", { method: "PUT", body: { email: e.target.checked } }); toast(e.target.checked ? "메일 알림을 켰습니다" : "메일 알림을 껐습니다"); } catch (x) { fail(x); } } }), "메일로도 받기") : "",
     el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),

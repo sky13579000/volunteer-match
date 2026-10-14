@@ -274,6 +274,31 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   ok('theme toggle changes the palette', (await k2.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== before);
   await k2.locator('#theme').click();
 
+  // ===== v0.6: records management (privacy detection, classification, disposal procedure) =====
+  const k3 = await login('kim');
+  await k3.hash('#/docs?q=' + encodeURIComponent('참가자 명단')); await k3.waitForSelector('.tbl tbody tr');
+  await k3.locator('.tbl tbody tr', { hasText: '참가자 명단' }).first().click(); await k3.waitForSelector('.privacy-banner');
+  const banner = await k3.textContent('.privacy-banner');
+  ok('privacy banner lists counts of detected identifiers', banner.includes('주민등록번호 2건') && banner.includes('휴대전화번호 2건'));
+  ok('detected values are never shown in the banner', !banner.includes('900101'));
+  ok('document shows its records classification', (await k3.textContent('.info-rail')).includes('02-03'));
+  const rec = await login('rec');
+  ok('records officer sees the records menu', (await rec.textContent('#nav')).includes('기록물 관리') && !(await rec.textContent('#nav')).includes('감사 로그'));
+  await rec.hash('#/records'); await rec.waitForSelector('.cand-chk');
+  ok('retention-expired document is a disposal candidate', (await rec.textContent('#view')).includes('2019 소규모 세미나'));
+  await rec.locator('.cand-chk').first().check(); await rec.fill('#disp-reason', 'e2e 보존기간 경과'); await rec.click('#disp-go'); await rec.waitForTimeout(900);
+  ok('disposal request is created and waits for another administrator', (await rec.textContent('#view')).includes('다른 관리자의 승인을 기다립니다'));
+  const ad2 = await login('admin');
+  await ad2.hash('#/records'); await ad2.waitForSelector('.card button.primary:has-text("승인·폐기")');
+  await ad2.locator('.card button.primary:has-text("승인·폐기")').first().click(); await ad2.dlg().getByRole('button', { name: '승인·폐기' }).click(); await ad2.waitForTimeout(900);
+  ok('approval permanently disposes the document', (await toastText(ad2)).includes('폐기 1건'));
+  await ad2.hash('#/records?tab=ledger'); await ad2.waitForSelector('.tbl');
+  ok('disposal ledger records the disposal with a file hash', (await ad2.textContent('#view')).includes('2019 소규모 세미나') && (await ad2.textContent('#view')).includes('서기록'));
+  await ad2.hash('#/records?tab=classes'); await ad2.waitForSelector('.tbl');
+  ok('classification scheme lists retention periods', (await ad2.textContent('#view')).includes('대관 계약') && (await ad2.textContent('#view')).includes('영구'));
+  await ad2.hash('#/records?tab=privacy'); await ad2.waitForSelector('.tbl');
+  ok('privacy overview shows the finding without a readable title for the administrator', (await ad2.textContent('#view')).includes('주민등록번호'));
+
   // ===== responsive + dark =====
   const mob = await login('kim', { viewport: { width: 400, height: 800 } });
   for (const h of ['#/dashboard', '#/docs', '#/tasks']) {

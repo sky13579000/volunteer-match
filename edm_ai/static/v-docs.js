@@ -19,8 +19,9 @@ const typeSelect = (value = "GEN") => el("select", { id: "f-type", "aria-label":
 
 // ---------------- register dialog ----------------
 export async function registerDialog(defaultFolder = 1) {
-  const tree = await api("/api/dms/folders");
+  const [tree, classRes] = await Promise.all([api("/api/dms/folders"), api("/api/dms/classifications")]);
   const opts = folderOptions(tree, { registerable: true });
+  const cls = el("select", { id: "f-class", "aria-label": "기록물 분류" }, [el("option", { value: "" }, "(분류 없음 — 문서유형 기준)"), ...classRes.items.filter((c) => c.parent || c.retention_years).map((c) => el("option", { value: c.code }, `${c.code} ${c.name} · 보존 ${c.retention_years >= 99 ? "영구" : c.retention_years ? c.retention_years + "년" : "-"}`))]);
   const file = el("input", { type: "file", id: "f-file", required: true, "aria-label": "파일" });
   const title = el("input", { id: "f-title", placeholder: "비워 두면 파일 내용/이름에서 가져옵니다" });
   const type = typeSelect();
@@ -40,7 +41,7 @@ export async function registerDialog(defaultFolder = 1) {
   return dialog("새 문서 등록", () => el("div", {},
     field("파일", file), field("제목", title), el("div", { class: "grid2" }, field("문서유형", type), field("폴더", folder)), typeHint,
     el("div", { class: "grid2" }, field("태그", tags), field("보안등급 (본인 L" + state.me.level + " 이하)", level)),
-    field("만료일 (선택)", exp), field("설명", desc),
+    field("기록물 분류 (선택)", cls), field("만료일 (선택)", exp), field("설명", desc),
     el("label", {}, "접근 권한"),
     el("label", { class: "inline" }, inherit, "폴더 권한 상속 (폴더에 지정이 없으면 내 부서만)"),
     el("label", { class: "inline" }, custom, "직접 지정"), editor),
@@ -48,10 +49,11 @@ export async function registerDialog(defaultFolder = 1) {
     if (!file.files[0]) throw new Error("파일을 선택하세요");
     const body = { filename: file.files[0].name, content_b64: await fileToB64(file.files[0]), folder_id: Number(folder.value), doc_type: type.value,
       title: title.value.trim() || undefined, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value,
-      level: Number(level.value || 0), expires_at: exp.value || undefined };
+      level: Number(level.value || 0), expires_at: exp.value || undefined, class_code: cls.value || undefined };
     if (custom.checked) body.entries = editor.get();
     const d = await api("/api/docs", { method: "POST", body });
     toast(`등록했습니다: ${d.doc_no}` + (d.status === "draft" ? " (결재 요청이 필요합니다)" : ""));
+    if (d.privacy?.findings?.some((f) => f.severity === "high")) toast("개인정보가 검출되었습니다: " + d.privacy.findings.map((f) => `${f.label} ${f.count}건`).join(", "), "bad");
     if (d.duplicates?.length) toast(`내용이 같은 문서가 있습니다: ${d.duplicates.map((x) => x.doc_no).join(", ")}`);
     go("#/doc/" + d.id);
   } }]);

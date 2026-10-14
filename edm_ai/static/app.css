@@ -263,3 +263,6 @@ dialog.palette{width:min(640px,calc(100% - 24px));margin-top:12vh;padding:0;over
 .top-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd)}.top-row:last-child{border-bottom:0}.kpi-h{display:block;margin-top:2px}
 .rep .card{align-self:stretch}@media print{.page-h select,.menu-wrap{display:none !important}.card{break-inside:avoid;box-shadow:none}}
 .page-h select{width:auto}.page-h .menu-wrap{display:inline-block}
+.cls-code{font-family:var(--mono);font-size:.82rem}.d1{padding-left:18px}.d2{padding-left:36px}.d3{padding-left:54px}
+.tabs button .ic{margin-right:4px}
+.privacy-banner{display:flex;gap:14px;align-items:flex-start;border-color:var(--bad);background:var(--bad-soft)}.privacy-banner .ic{color:var(--bad);margin-top:2px}

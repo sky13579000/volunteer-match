@@ -4,7 +4,7 @@ import { icon } from "./icons.js";
 /** Ctrl/⌘+K: jump to any page or document. Documents come from the normal permission-checked search. */
 const PAGES = [["#/dashboard", "대시보드", "home"], ["#/docs", "문서함", "folder"], ["#/chat", "AI 질의응답", "sparkles"], ["#/new", "양식으로 새 문서 작성", "file"], ["#/tasks", "결재함", "task"],
   ["#/access", "권한 신청", "key"], ["#/calendar", "일정 캘린더", "calendar"], ["#/notifications", "알림", "bell"], ["#/docs?favorites=1", "즐겨찾기", "star"], ["#/docs?mine=1", "내가 올린 문서", "user"], ["#/trash", "휴지통", "trash"]];
-const ADMIN = [["#/admin/audit", "감사 로그", "shield"], ["#/admin/reports", "리포트", "chart"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/types", "문서유형 · 보존", "layers"]];
+const ADMIN = [["#/records", "기록물 관리", "book"], ["#/admin/audit", "감사 로그", "shield"], ["#/admin/reports", "리포트", "chart"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/types", "문서유형 · 보존", "layers"]];
 
 export function openPalette() {
   if (document.querySelector("dialog.palette")) return;

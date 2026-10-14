@@ -131,8 +131,15 @@ class DocsMixin:
         return self.folder(fid)
 
     # ================= register =================
-    def _retention_until(self, t: dict, approved_at: str) -> str | None:
+    def _retention_until(self, t: dict, approved_at: str, class_code=None) -> str | None:
+        """The longer of the document type's and the classification's retention (99 = permanent)."""
         y = int(t.get("retention_years") or 0)
+        if class_code:
+            c = self.q1("SELECT retention_years FROM classifications WHERE code=?", (class_code,))
+            cy = int(c["retention_years"]) if c else 0
+            if cy >= 99:
+                return "9999-12-31"
+            y = max(y, cy)
         return add_days(approved_at, 365 * y + y // 4)[:10] if y > 0 else None
 
     def _approve_version(self, row_id, ver, t, who):
@@ -144,14 +151,14 @@ class DocsMixin:
                 self.db.execute("UPDATE dms_versions SET status='superseded' WHERE doc_id=? AND ver=?", (row_id, old))
             self.db.execute("UPDATE dms_versions SET status='approved' WHERE doc_id=? AND ver=?", (row_id, ver))
             doc = self.db.execute("SELECT retention_until FROM dms_docs WHERE id=?", (row_id,)).fetchone()
-            ret = self._retention_until(t, ts)
+            ret = self._retention_until(t, ts, self.q1("SELECT class_code FROM dms_docs WHERE id=?", (row_id,))["class_code"])
             if doc[0] and ret:
                 ret = max(doc[0], ret)
             self.db.execute("UPDATE dms_docs SET effective_ver=?, status='approved', approved_at=?, retention_until=COALESCE(?,retention_until), "
                             "updated=? WHERE id=?", (ver, ts, ret, ts, row_id))
 
     def register(self, p, filename, data: bytes, *, folder_id=1, title=None, doc_type="GEN", tags=None, props=None,
-                 description="", level=0, entries=None, inherit=True, expires_at=None, comment="") -> dict:
+                 description="", level=0, entries=None, inherit=True, expires_at=None, comment="", class_code=None) -> dict:
         name = self.clean_name(filename)
         self.check_size(data)
         f = self.folder(folder_id)
@@ -166,19 +173,21 @@ class DocsMixin:
         ents = self._norm_entries(entries)
         tags, props = self.clean_tags(tags), self.clean_props(props)
         expires = self.clean_date(expires_at, "만료일")
+        cls = self._class(class_code)
         description = str(description or "")[:2000]
         if not ents and not any(e["type"] != "deny" for e in self._folder_entries(folder_id)):
             ents = [{"type": "dept", "id": p.dept, "role": "editor"}] if p.dept else [{"type": "user", "id": p.id, "role": "manager"}]   # safe default
         ts = now()
         doc_no = self.next_no(t)
-        cur = self.x("INSERT INTO dms_docs(doc_no,source,title,folder_id,doc_type,owner,created,updated,tags,props,description,level,inherit,entries,expires_at) "
-                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        cur = self.x("INSERT INTO dms_docs(doc_no,source,title,folder_id,doc_type,owner,created,updated,tags,props,description,level,inherit,entries,expires_at,class_code) "
+                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      (doc_no, MANAGED_PREFIX + doc_no, "", folder_id, t["code"], p.id, ts, ts, json.dumps(tags), json.dumps(props, ensure_ascii=False),
-                      description, level, int(bool(inherit)), json.dumps(ents), expires))
+                      description, level, int(bool(inherit)), json.dumps(ents), expires, cls["code"] if cls else None))
         did = cur.lastrowid
         try:
             rel, sha = self._store_file(did, 1, name, data)
             ttl, text = self._extract(rel, name)
+            found = self._dlp_gate(p, text)
         except Exception:
             self.x("DELETE FROM dms_docs WHERE id=?", (did,))
             import shutil
@@ -194,6 +203,7 @@ class DocsMixin:
         row = self.row(did)
         self.reindex(row)
         self.log(p, row, "registered", f"{doc_no} v1 {len(data)} bytes")
+        self._dlp_apply(p, row, 1, found)
         out = self.get(p, did)
         out["duplicates"] = self.duplicates(p, sha, exclude=did)
         return out
@@ -259,6 +269,7 @@ class DocsMixin:
             raise DmsError(409, "이전 버전과 내용이 같습니다")
         try:
             _, text = self._extract(rel, name)
+            found = self._dlp_gate(p, text)
         except Exception:
             import shutil
             shutil.rmtree(self.repo / str(row["id"]) / str(ver), ignore_errors=True)
@@ -274,6 +285,7 @@ class DocsMixin:
         row = self.row(row["id"])
         self.reindex(row)
         self.log(p, row, "new_version" if not restored_from else "restored", f"v{ver}" + (f" (v{restored_from} 복원)" if restored_from else ""))
+        self._dlp_apply(p, row, ver, found)
         return self.get(p, row["id"])
 
     def new_version(self, p, doc_id, filename, data, comment="") -> dict:
@@ -366,6 +378,9 @@ class DocsMixin:
         if "expires_at" in f:
             sets["expires_at"] = self.clean_date(f["expires_at"], "만료일")
             sets["expire_notified"] = 0
+        if "class_code" in f:
+            c = self._class(f["class_code"])
+            sets["class_code"] = c["code"] if c else None
         if "level" in f:
             if "manage" not in self.perms(p, row) and "acl" not in self.perms(p, row):
                 raise DmsError(403, "보안등급은 관리 권한이 필요합니다")
@@ -478,6 +493,10 @@ class DocsMixin:
         d["following"] = self.is_following(p, doc_id)
         d["legal_hold"] = bool(row["legal_hold"])
         d["props"] = row["props"]
+        d["class_code"] = row["class_code"]
+        c = self.q1("SELECT name, retention_years FROM classifications WHERE code=?", (row["class_code"],)) if row["class_code"] else None
+        d["class_name"], d["class_retention_years"] = (c["name"], c["retention_years"]) if c else (None, None)
+        d["privacy"] = self.privacy_of(p, row)
         self.x("INSERT OR REPLACE INTO recent VALUES(?,?,?)", (p.id, doc_id, now()))
         return d
 

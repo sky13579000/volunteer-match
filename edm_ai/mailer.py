@@ -23,6 +23,9 @@ KINDS = {
     "access_request": "문서 접근 권한 신청이 도착했습니다",
     "access_granted": "문서 접근 권한 신청이 승인되었습니다",
     "access_denied": "문서 접근 권한 신청이 거절되었습니다",
+    "privacy_alert": "문서에서 개인정보가 검출되었습니다",
+    "disposal_request": "폐기 심의 신청이 도착했습니다",
+    "disposal_result": "폐기 심의 결과가 나왔습니다",
 }
 
 

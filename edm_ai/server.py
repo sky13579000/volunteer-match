@@ -180,7 +180,8 @@ def make_handler(app: App, demo_login: bool):
             if not u:
                 return self._send(401, {"error": "unauthenticated"})
             if method == "GET" and path == "/api/me":
-                return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles})
+                return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles,
+                                            "is_records": "admin" in u.roles or "records" in u.roles})
             if method == "GET" and path == "/api/audit":
                 if "admin" not in u.roles:
                     return self._send(403, {"error": "forbidden"})

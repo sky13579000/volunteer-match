@@ -10,6 +10,12 @@ def seed(app):
     day = lambda n: (date.today() + timedelta(days=n)).isoformat()                  # noqa: E731
     md = lambda title, *paras: ("# " + title + "\n\n" + "\n\n".join(paras)).encode()  # noqa: E731
     with d.batch():
+        # ---- 기록물 분류표 (보존기간 연계; 99 = 영구) ----
+        for code, name, parent, years in [("01", "경영·기획", "", 0), ("01-01", "이사회·의결", "01", 99), ("01-02", "규정·지침 관리", "01", 30), ("02", "행사 유치·대관", "", 0),
+                                          ("02-01", "대관 계약", "02", 10), ("02-02", "행사 결과·정산", "02", 5), ("02-03", "참가자 명단·등록 정보", "02", 3), ("03", "시설·안전", "", 0),
+                                          ("03-01", "시설 점검·유지보수", "03", 5), ("03-02", "안전·재난 대응", "03", 10), ("04", "재무·회계", "", 0), ("04-01", "예산·결산", "04", 10),
+                                          ("04-02", "지출·정산 증빙", "04", 5), ("05", "인사·총무", "", 0), ("05-01", "인사 기록", "05", 99), ("05-02", "근태·복무", "05", 3), ("06", "정보공개·민원", "", 3)]:
+            d.save_classification(U["admin"], {"code": code, "name": name, "parent": parent, "retention_years": years})
         # ---- 공용 규정: everybody may read; admin owns ----
         sec = d.register(U["admin"], "정보보안규정.md", md("사내 정보보안 규정", "## 목적", "임직원은 업무상 취득한 고객 정보와 문서를 외부에 유출하지 않는다. 비밀번호는 90일마다 변경한다.",
                          "## 문서 반출", "보안등급 2 이상 문서는 승인 없이 사외로 반출할 수 없으며 외부 공유 링크는 유효기간을 7일 이내로 한다."),
@@ -76,8 +82,15 @@ def seed(app):
               "## 제2조(이해충돌)", "계약 상대방이 본인 또는 가족과 이해관계가 있으면 해당 업무에서 회피하고 소속 팀장에게 신고한다."]),
         ]
         for fn, title, tags, desc, body in regs:
-            d.register(U["admin"], fn, md(title, NOTE, *body), folder_id=fid("규정"), doc_type="GEN", tags=tags, description=desc)
+            d.register(U["admin"], fn, md(title, NOTE, *body), folder_id=fid("규정"), doc_type="GEN", tags=tags, description=desc, class_code="01-02")
 
+        # ---- 개인정보 검출 · 폐기 심의 시연용 (※ 번호는 모두 가상) ----
+        d.register(U["kim"], "참가자명단_예시.md", md("행사 참가자 명단 (예시 · 가상 데이터)", "※ 시연용 가상 데이터입니다. 실제 개인정보가 아닙니다.",
+                   "| 이름 | 연락처 | 주민등록번호 |", "|---|---|---|", "| 홍길동 | 010-1234-5678 | 900101-1234567 |", "| 김제주 | 010-9876-5432 | 880315-2345678 |"),
+                   folder_id=fid("MICE유치팀"), doc_type="GEN", tags=["참가자", "예시"], description="개인정보 검출 시연", class_code="02-03")
+        old = d.register(U["kim"], "2019_행사결과.md", md("2019 소규모 세미나 결과 (보존기간 경과 예시)", "참석 120명, 만족도 4.2/5.0. 보존기간이 지나 폐기 심의 대상이 되는 시연용 문서입니다."),
+                         folder_id=fid("MICE유치팀"), doc_type="GEN", tags=["2019"], class_code="02-02")
+        d.x("UPDATE dms_docs SET retention_until=? WHERE id=?", ("2025-01-31", old["id"]))
         d.set_favorite(U["kim"], plan["id"], True)
         d.set_favorite(U["kim"], sec["id"], True)
     d.maintenance()
