@@ -12,25 +12,29 @@ _MONEY = re.compile(r"((?:(?:\d[\d,]*(?:\.\d+)?)?\s*[조억만천백십]\s*)+)(\
 _DATE = re.compile(r"(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?")
 
 
-def parse_krw(text: str) -> list[int]:
-    """'4억 8천만원' / '3천5백만원' / '480,000,000원' / '1.2억원' -> won, in order of appearance.
+def _value(m) -> int:
+    if m.group(3) is not None:
+        return int(round(float(m.group(3).replace(",", ""))))
+    total = block = 0.0
+    for num, unit in _TOK.findall(m.group(1)):
+        n = float(num.replace(",", "")) if num else None
+        if unit in _SUB:
+            block += (n if n is not None else 1) * _SUB[unit]
+        else:
+            total += ((block + n) if n is not None else (block or 1)) * _BIG[unit]
+            block = 0.0
+    total += block + (float(m.group(2).replace(",", "")) if m.group(2) else 0)
+    return int(round(total))
+
+
+def money_spans(text: str) -> list[tuple[int, int, int]]:
+    """(start, end, won) for every amount phrase: '4억 8천만원', '3천5백만원', '480,000,000원', '1.2억원'.
     Blocks: sub-units (천 백 십) accumulate into a block that a big unit (만 억 조) then scales."""
-    out = []
-    for m in _MONEY.finditer(text):
-        if m.group(3) is not None:
-            out.append(int(round(float(m.group(3).replace(",", "")))))
-            continue
-        total = block = 0.0
-        for num, unit in _TOK.findall(m.group(1)):
-            n = float(num.replace(",", "")) if num else None
-            if unit in _SUB:
-                block += (n if n is not None else 1) * _SUB[unit]
-            else:
-                total += ((block + n) if n is not None else (block or 1)) * _BIG[unit]
-                block = 0.0
-        total += block + (float(m.group(2).replace(",", "")) if m.group(2) else 0)
-        out.append(int(round(total)))
-    return out
+    return [(m.start(), m.end(), _value(m)) for m in _MONEY.finditer(text)]
+
+
+def parse_krw(text: str) -> list[int]:
+    return [v for _, _, v in money_spans(text)]
 
 
 def parse_dates(text: str) -> list[str]:

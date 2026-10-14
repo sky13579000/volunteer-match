@@ -53,6 +53,7 @@ def main(argv=None):
     e = sub.add_parser("eval", help="run golden-set evaluation; exits 1 on any leak or recall < --min-recall")
     e.add_argument("golden")
     e.add_argument("--min-recall", type=float, default=0.9)
+    sub.add_parser("llm-check", help="verify the configured LLM / embedding server (connectivity, citations, grounding)")
     sub.add_parser("verify-audit", help="check the audit hash chain")
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
@@ -81,7 +82,14 @@ def main(argv=None):
         from .evaluate import run_eval
         r = run_eval(app, Path(args.golden))
         print(json.dumps(r, ensure_ascii=False, indent=2))
-        sys.exit(0 if r["leaks"] == 0 and r["recall"] >= args.min_recall and not r["failures"] else 1)
+        sys.exit(0 if r["leaks"] == 0 and r["recall"] >= args.min_recall and not r["failures"]
+                 and not r["ungrounded_numbers"] else 1)
+    elif args.cmd == "llm-check":
+        from .llmcheck import run_check
+        lines, ok = run_check(app)
+        for level, msg in lines:
+            print(f"[{level}] {msg}")
+        sys.exit(0 if ok else 1)
     elif args.cmd == "verify-audit":
         ok, bad = app.store.verify_audit()
         print("OK" if ok else f"TAMPERED at audit id {bad}")

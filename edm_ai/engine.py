@@ -3,7 +3,7 @@ from __future__ import annotations
 from .entities import EntityExtractor
 from .gateway import SqlGateway
 from .index import Index
-from .llm import citations_valid
+from .llm import citations_valid, numbers_grounded
 from .models import Answer, Evidence, Principal
 from .safety import redact_pii, scrub_injection
 from .store import DocumentStore
@@ -95,7 +95,7 @@ class Engine:
             block = "\n\n".join(f"[{e.id}] ({e.title}) {scrub_injection(e.text)[0]}" for e in evidence)
             try:
                 text = self.llm.complete(question, block)
-                if citations_valid(text, len(evidence)):
+                if citations_valid(text, len(evidence)) and not numbers_grounded(text, [e.text for e in evidence]):
                     return Answer(text, evidence, generator="llm")
             except Exception:  # network/model failure must never break the answer path
                 pass

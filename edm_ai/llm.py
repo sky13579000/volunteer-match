@@ -38,3 +38,39 @@ def citations_valid(answer: str, n_evidence: int) -> bool:
     """Grounding guard: at least one citation, and every citation points at supplied evidence."""
     ids = [int(x) for x in _CITE.findall(answer)]
     return bool(ids) and all(1 <= i <= n_evidence for i in ids)
+
+
+_NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers(text: str) -> tuple[set, str]:
+    """(amounts in won found as money phrases, remaining text with those phrases removed)."""
+    from .automation import money_spans
+    vals, out, last = set(), [], 0
+    for a, b, v in money_spans(text):
+        vals.add(v)
+        out.append(text[last:a])
+        last = b
+    out.append(text[last:])
+    return vals, " ".join(out)
+
+
+def numbers_grounded(answer: str, evidence_texts: list[str]) -> list[str]:
+    """Second grounding guard: every amount / multi-digit number the model states must occur in the evidence.
+    Returns the offending numbers (empty = grounded). A model that sums or invents figures is rejected, because a
+    cited-but-wrong number is worse than a plain excerpt. Amounts match across notations (4억 8천만원 == 480,000,000)."""
+    answer = _CITE.sub(" ", answer)
+    ev_amounts: set = set()
+    ev_plain: set = set()
+    for t in evidence_texts:
+        amounts, rest = _numbers(t)
+        ev_amounts |= amounts
+        ev_plain |= {x.replace(",", "") for x in _NUM.findall(t)} | {x.replace(",", "") for x in _NUM.findall(rest)}
+    ev_amounts |= {int(float(x)) for x in ev_plain if re.fullmatch(r"\d+(\.\d+)?", x) and float(x) >= 1000}
+    a_amounts, a_rest = _numbers(answer)
+    bad = [f"{v:,}원" for v in sorted(a_amounts) if v not in ev_amounts]
+    for tok in _NUM.findall(a_rest):
+        plain = tok.replace(",", "")
+        if len(plain.split(".")[0]) >= 3 and plain not in ev_plain and not (plain.isdigit() and int(plain) in ev_amounts):
+            bad.append(tok)
+    return bad

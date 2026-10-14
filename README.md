@@ -51,7 +51,9 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 | 브라우저 UI (Chromium) | ✅ 로그인/질의/근거/거절/감사/XSS 시나리오 |
 | Docker 이미지·compose 스택 | ✅ 빌드·기동·PostgreSQL 연동·권한별 응답 확인 |
 | Oracle Free 23ai 실서버 | ✅ 통합 테스트 5건 + 골든셋(SQLite·PostgreSQL과 동일 결과). `ERP_ORA_*` 설정 시 실행 |
-| LLM/임베딩 HTTP 통신 | ✅ OpenAI 호환 스텁 서버로 요청 형식·인증·인용 검증·타임아웃 폴백 검증. **실제 모델(vLLM/Ollama)로는 미검증** |
+| LLM/임베딩 HTTP 통신 | ✅ 스텁·모의 서버로 요청 형식·인증·인용/숫자 검증·폴백·`llm-check`·`eval` 전체 경로 검증. **실제 모델(vLLM/Ollama)의 답변 품질은 미검증** |
+| Slack/웹훅 | ✅ 서명 검증(Slack 공식 예시 값 일치)·재전송 방어·미매핑 사용자 거부. 실제 Slack 워크스페이스 연동은 미검증 |
+| 브라우저 e2e | ✅ `tests/e2e/ui.e2e.js` 18개 (문서·업로드·권한 변경·알림·XSS) |
 
 ## 핵심 설계
 | 세미나 주제 | 구현 |
@@ -68,6 +70,7 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 ## v0.3 추가 기능 (EDM · 자동화 · 연동)
 - **EDM 화면**: 문서 목록·검색, 업로드(권한 지정), 상세(자동 요약/추출 항목/DB 대조/연결 DB 행/이력), 소유자·관리자 권한 편집, 삭제. 읽을 수 없는 문서는 404.
 - **업무 자동화**: 문서에서 계약번호·계약금액("4억 8천만원")·납기를 추출해 업무 DB와 **호출자 권한으로** 대조 → 알림 탭/배지. 가려진 컬럼은 대조하지 않음.
+- **LLM 점검·평가**: `llm-check`(연결·인용·숫자 근거·임베딩 품질), 답변 숫자 근거 검증(지어낸 금액 폐기), `eval`의 `must_contain`/`llm_share`. [docs/LLM.md](docs/LLM.md)
 - **외부 연동**: Slack 슬래시 명령(서명 검증), 서명 웹훅, 파이썬 클라이언트. 자세한 내용은 [docs/API.md](docs/API.md).
 
 ## v0.2 추가 기능

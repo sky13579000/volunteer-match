@@ -108,5 +108,30 @@
     "expect": [
       "contracts/한빛전자"
     ]
+  },
+  {
+    "user": "park",
+    "question": "고객사별 계약금액 합계",
+    "must_contain": [
+      "850,000,000"
+    ]
+  },
+  {
+    "user": "kim",
+    "question": "한빛전자 MES 계약 금액",
+    "must_contain": [
+      "480,000,000"
+    ],
+    "must_not_contain": [
+      "0.18"
+    ]
+  },
+  {
+    "user": "choi",
+    "question": "한빛전자 지체상금 계약",
+    "must_not_contain": [
+      "480000000",
+      "지체상금"
+    ]
   }
 ]
