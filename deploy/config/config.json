@@ -182,5 +182,14 @@
       "amount_col": "amount",
       "due_col": "due_date"
     }
+  },
+  "dms": {
+    "repo": "/data/repo",
+    "external_share": {
+      "enabled": false,
+      "max_days": 30,
+      "max_level": 1
+    },
+    "trash_days": 30
   }
 }
