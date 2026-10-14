@@ -4,6 +4,13 @@
 **외부 의존성 0 (Python 표준 라이브러리만)** — 온프레미스·폐쇄망에 그대로 반입할 수 있습니다.
 
 ## 빠른 시작
+**가장 빠른 방법 (Python 3.10+만 있으면 됨, 설치할 것 없음):**
+```bash
+./run-demo.sh            # Windows: run-demo.bat   (또는 python3 -m edm_ai demo)
+```
+샘플 데이터를 만들고 서버를 띄운 뒤 브라우저를 엽니다 → http://127.0.0.1:8080 (포트 변경 `--port 8081`, 브라우저 자동 열기 끄기 `--no-browser`).
+
+개별 명령:
 ```bash
 python3 examples/demo/build_demo.py                      # 데모 ERP DB 생성 + 문서 수집
 python3 -m edm_ai.cli -c examples/demo/config.json ask -u kim  "한빛전자 MES 계약 금액과 납기 지연 이슈는?"

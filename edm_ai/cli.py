@@ -7,10 +7,38 @@ import sys
 from .config import App
 
 
+def run_demo(args):
+    import runpy
+    import threading
+    import webbrowser
+    from pathlib import Path
+
+    demo = Path(__file__).resolve().parent.parent / "examples" / "demo"
+    if not (demo / "build_demo.py").exists():
+        sys.exit("demo data not found: run this from a checkout of the repository")
+    runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
+    url = f"http://{args.host}:{args.port}/"
+    print(f"\n  EDM-AI demo  ->  {url}\n  Pick a user at the top, then ask e.g. '한빛전자 MES 계약 금액과 납기 지연 이슈는?'\n"
+          "  Try 김영업(영업) vs 박재무(재무) vs 최협력(외부). Ctrl+C to stop.\n")
+    if not args.no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    from .server import serve
+    try:
+        serve(App(str(demo / "config.json")), args.host, args.port, demo_login=True)
+    except OSError as e:
+        sys.exit(f"cannot listen on {args.host}:{args.port} ({e}); try --port 8081")
+    except KeyboardInterrupt:
+        pass
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="edm-ai")
-    ap.add_argument("-c", "--config", required=True)
+    ap.add_argument("-c", "--config", help="config.json (not needed for `demo`)")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    d = sub.add_parser("demo", help="build the sample data and start the web UI (needs a repo checkout)")
+    d.add_argument("--port", type=int, default=8080)
+    d.add_argument("--host", default="127.0.0.1")
+    d.add_argument("--no-browser", action="store_true")
     sub.add_parser("ingest", help="crawl documents into the store (ACL-aware, incremental)")
     a = sub.add_parser("ask")
     a.add_argument("question")
@@ -31,6 +59,10 @@ def main(argv=None):
     s.add_argument("--demo-login", action="store_true", help="user picker page; NEVER enable in production")
     args = ap.parse_args(argv)
 
+    if args.cmd == "demo":
+        return run_demo(args)
+    if not args.config:
+        ap.error("-c/--config is required")
     app = App(args.config)
     if args.cmd == "ingest":
         print(json.dumps(app.ingest()))
