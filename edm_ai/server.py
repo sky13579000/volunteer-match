@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import adapters, auth
+from . import __version__, adapters, auth
 from .config import App
 from .errors import DmsError
 from .routes import Raw, build_routes
@@ -146,7 +146,7 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(200, (STATIC / "share.html").read_text("utf-8"), "text/html")
                 if path == "/api/config":
                     return self._send(200, {"auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
-                                            "examples": app.cfg.get("examples", [])})
+                                            "examples": app.cfg.get("examples", []), "version": __version__})
                 if path == "/api/demo-users":
                     if not (demo_login and acfg["mode"] == "header"):
                         return self._send(404, {"error": "not found"})

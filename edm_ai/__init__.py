@@ -1,2 +1,2 @@
-"""EDM-AI: permission-aware, evidence-grounded AI over documents + structured data."""
-__version__ = "0.1.0"
+"""EDM-AI: document management + permission-aware, evidence-grounded AI over documents and structured data."""
+__version__ = "0.4.0"

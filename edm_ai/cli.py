@@ -16,9 +16,14 @@ def run_demo(args):
     demo = Path(__file__).resolve().parent.parent / "examples" / "demo"
     if not (demo / "build_demo.py").exists():
         sys.exit("demo data not found: run this from a checkout of the repository")
+    if args.reset:
+        import shutil
+        shutil.rmtree(demo / "workspace", ignore_errors=True)
+        shutil.rmtree(demo / "docs" / "uploads", ignore_errors=True)
     runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
     url = f"http://{args.host}:{args.port}/"
-    print(f"\n  EDM-AI demo  ->  {url}\n  Pick a user at the top, then ask e.g. '한빛전자 MES 계약 금액과 납기 지연 이슈는?'\n"
+    from . import __version__
+    print(f"\n  EDM-AI v{__version__} demo  ->  {url}\n  Pick a user at the top, then ask e.g. '한빛전자 MES 계약 금액과 납기 지연 이슈는?'\n"
           "  Try 김영업(영업) vs 박재무(재무) vs 최협력(외부). Ctrl+C to stop.\n")
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
@@ -42,6 +47,7 @@ def main(argv=None):
     d.add_argument("--port", type=int, default=8080)
     d.add_argument("--host", default="127.0.0.1")
     d.add_argument("--no-browser", action="store_true")
+    d.add_argument("--reset", action="store_true", help="delete the demo workspace first (fresh data, no leftovers from an older version)")
     sub.add_parser("ingest", help="crawl documents into the store (ACL-aware, incremental)")
     a = sub.add_parser("ask")
     a.add_argument("question")

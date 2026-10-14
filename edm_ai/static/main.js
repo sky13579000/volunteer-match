@@ -25,6 +25,7 @@ async function enter() {
   state.meta = await api("/api/dms/config");
   $("#login").hidden = true;
   $("#shell").hidden = false;
+  $("#ver").textContent = "EDM-AI v" + (state.cfg.version || "?");
   $("#who").textContent = `${state.me.name} · ${state.me.dept || "-"} · L${state.me.level}`;
   buildNav();
   refreshBell();
@@ -39,6 +40,7 @@ async function boot() {
   $("#bell").addEventListener("click", () => go("#/notifications"));
   $("#logout").addEventListener("click", () => { try { sessionStorage.clear(); } catch { /* ignore */ } location.hash = ""; location.reload(); });
   window.addEventListener("hashchange", render);
+  $("#login-ver").textContent = "v" + (state.cfg.version || "");
   if (state.cfg.auth_mode === "token") $("#login-token").hidden = false;
   else if (state.cfg.demo) {
     $("#login-demo").hidden = false;

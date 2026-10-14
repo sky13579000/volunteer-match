@@ -2,25 +2,49 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "최신 코드 받기 (git pull)",
+      "type": "shell",
+      "command": "git fetch origin claude/edm-ai-integration-platform-dzzryy && git checkout claude/edm-ai-integration-platform-dzzryy && git pull origin claude/edm-ai-integration-platform-dzzryy",
+      "problemMatcher": []
+    },
+    {
+      "label": "데모 초기화 후 실행",
+      "type": "shell",
+      "command": "python3 -m edm_ai demo --reset",
+      "windows": {
+        "command": "py -m edm_ai demo --reset"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "데모 데이터 생성",
       "type": "shell",
       "command": "python3 examples/demo/build_demo.py",
-      "windows": {"command": "py examples/demo/build_demo.py"},
+      "windows": {
+        "command": "py examples/demo/build_demo.py"
+      },
       "problemMatcher": []
     },
     {
       "label": "테스트 실행",
       "type": "shell",
       "command": "python3 -m unittest discover -s tests -v",
-      "windows": {"command": "py -m unittest discover -s tests -v"},
-      "group": {"kind": "test", "isDefault": true},
+      "windows": {
+        "command": "py -m unittest discover -s tests -v"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
       "problemMatcher": []
     },
     {
       "label": "평가 (권한 누출 0 확인)",
       "type": "shell",
       "command": "python3 -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json",
-      "windows": {"command": "py -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json"},
+      "windows": {
+        "command": "py -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json"
+      },
       "problemMatcher": []
     },
     {
