@@ -7,6 +7,16 @@ import sys
 from .config import App
 
 
+def _lan_ip() -> str:
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect(("10.255.255.255", 1))      # no packet is sent; picks the outbound interface
+            return sk.getsockname()[0]
+    except OSError:
+        return socket.gethostname()
+
+
 def _probe(host: str, port: int, timeout: float = 0.7):
     """What is already answering on host:port? -> ('free'|'edm-ai'|'other', version or None)"""
     import json as _json
@@ -34,13 +44,16 @@ def run_demo(args):
 
     demo = Path(__file__).resolve().parent.parent / "examples" / "demo"
     if not (demo / "build_demo.py").exists():
-        sys.exit("demo data not found: run this from a checkout of the repository")
+        sys.exit("demo data not found: run this from the downloaded folder (or use the single-file edm-ai.pyz)")
     # An older EDM-AI left running on the classic port is the usual reason people keep seeing an old screen.
-    kind, ver = _probe(args.host, 8080)
+    if args.lan:
+        args.host = "0.0.0.0"
+    probe_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    kind, ver = _probe(probe_host, 8080)
     stale = f"\n  ! 포트 8080 에서 이전 EDM-AI (버전 {ver}) 가 아직 실행 중입니다. 8080 으로 접속하면 옛 화면이 보입니다. 아래 새 주소만 쓰세요.\n" if kind == "edm-ai" and ver != __version__ else ""
     port = args.port
     for cand in range(args.port, args.port + 20):
-        if _probe(args.host, cand)[0] == "free":
+        if _probe(probe_host, cand)[0] == "free":
             port = cand
             break
     else:
@@ -50,10 +63,14 @@ def run_demo(args):
         shutil.rmtree(demo / "workspace", ignore_errors=True)
         shutil.rmtree(demo / "docs" / "uploads", ignore_errors=True)
     runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
-    url = f"http://{args.host}:{port}/"
+    url = f"http://{probe_host}:{port}/"
+    lan = ""
+    if args.lan:
+        lan = (f"\n  ! 같은 네트워크의 다른 PC 에서는  http://{_lan_ip()}:{port}/  로 접속합니다 (방화벽에서 {port} 허용 필요).\n"
+               "  ! 데모는 로그인 비밀번호가 없습니다 - 신뢰할 수 있는 내부망에서만 쓰세요. 실제 운영은 docs/OPERATIONS.md 의 인증 설정을 따르세요.\n")
     bar = "=" * 66
     print(f"\n{bar}\n  EDM-AI v{__version__}  문서중앙화 + AI  (폴더·버전·결재·보존·공유·감사)\n"
-          f"  이 주소를 여세요  ->  {url}\n{stale}"
+          f"  이 주소를 여세요  ->  {url}\n{stale}{lan}"
           f"  상단에서 김유치(MICE유치) / 박재정(경영지원) / 최협력(외부) 를 바꿔 보세요.  종료: Ctrl+C\n{bar}\n")
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
@@ -77,6 +94,7 @@ def main(argv=None):
     d.add_argument("--port", type=int, default=8787, help="first port to try (the next free one is used if it is busy)")
     d.add_argument("--host", default="127.0.0.1")
     d.add_argument("--no-browser", action="store_true")
+    d.add_argument("--lan", action="store_true", help="listen on all interfaces so other PCs on the same network can open it (demo login has NO password: trusted network only)")
     d.add_argument("--reset", action="store_true", help="delete the demo workspace first (fresh data, no leftovers from an older version)")
     sub.add_parser("ingest", help="crawl documents into the store (ACL-aware, incremental)")
     a = sub.add_parser("ask")

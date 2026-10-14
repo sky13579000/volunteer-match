@@ -19,7 +19,7 @@ ZIP으로 받았다면 압축을 풀고, 폴더에서 주소창에 `powershell`�
 ```powershell
 py -m edm_ai demo
 ```
-브라우저가 `http://127.0.0.1:8787` 을 엽니다. 종료는 터미널에서 `Ctrl+C`. (또는 폴더의 `run-demo.bat` 더블클릭)
+브라우저가 `http://127.0.0.1:8787` 을 엽니다. (다른 PC·파일 1개 배포: [PORTABLE.md](PORTABLE.md)) 종료는 터미널에서 `Ctrl+C`. (또는 폴더의 `run-demo.bat` 더블클릭)
 
 옵션: `py -m edm_ai demo --port 8081` (포트 변경), `--no-browser` (브라우저 안 열기)
 
