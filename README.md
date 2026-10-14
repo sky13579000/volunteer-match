@@ -10,6 +10,8 @@
 ```
 샘플 데이터를 만들고 서버를 띄운 뒤 브라우저를 엽니다 → http://127.0.0.1:8080 (포트 변경 `--port 8081`, 브라우저 자동 열기 끄기 `--no-browser`).
 
+**Windows 사용자는 [docs/WINDOWS.md](docs/WINDOWS.md)** 를 보세요(PowerShell 명령어 기준).
+
 개별 명령:
 ```bash
 python3 examples/demo/build_demo.py                      # 데모 ERP DB 생성 + 문서 수집

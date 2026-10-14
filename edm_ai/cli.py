@@ -32,6 +32,9 @@ def run_demo(args):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):      # Windows consoles default to cp949: never crash on Korean / '●'
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="edm-ai")
     ap.add_argument("-c", "--config", help="config.json (not needed for `demo`)")
     sub = ap.add_subparsers(dest="cmd", required=True)
