@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>공유 문서</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header><h1>공유 문서</h1><span class="hint" id="exp"></span></header>
+<main class="share">
+  <section id="pw" class="card" hidden>
+    <h2 class="flush">비밀번호가 필요합니다</h2>
+    <form id="pw-form" class="stack">
+      <input id="pw-input" type="password" autocomplete="off" required aria-label="비밀번호">
+      <button class="primary">열기</button>
+    </form>
+  </section>
+  <section id="doc" class="card" hidden>
+    <h2 class="flush" id="title"></h2>
+    <div class="ref" id="meta"></div>
+    <div class="row sec"><button id="dl" class="primary" hidden>다운로드</button><span id="left" class="hint"></span></div>
+    <div class="sec"><h3>내용 미리보기 <span class="hint">(개인정보는 가려져 있습니다)</span></h3><pre class="body" id="text"></pre></div>
+  </section>
+  <p id="err" class="err" role="alert"></p>
+</main>
+<script src="/share.js"></script>
+</body>
+</html>
