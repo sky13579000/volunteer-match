@@ -67,6 +67,36 @@ def build_routes(app):
         b = req.body(1_300_000)
         return d.edit_text(u, i(m), b.get("text"), b.get("comment", ""))
 
+    @route("POST", r"/api/dms/access-requests")
+    def _ar_new(req, u, m, qs):
+        b = req.body(8192)
+        return d.request_access(u, b.get("ref"), b.get("role", "viewer"), b.get("reason", ""))
+
+    @route("GET", r"/api/dms/access-requests")
+    def _ar_list(req, u, m, qs):
+        return d.list_access_requests(u)
+
+    @route("POST", r"/api/dms/access-requests/(\d+)/decide")
+    def _ar_decide(req, u, m, qs):
+        b = req.body(8192)
+        return d.decide_access(u, i(m), bool(b.get("approve")), b.get("note", ""))
+
+    @route("POST", r"/api/docs/(\d+)/ask")
+    def _ask_doc(req, u, m, qs):
+        return d.ask_doc(u, i(m), req.body(8192).get("question"))
+
+    @route("POST", r"/api/docs/(\d+)/follow")
+    def _follow(req, u, m, qs):
+        return d.set_follow(u, i(m), bool(req.body(1024).get("on")))
+
+    @route("GET", r"/api/dms/follows")
+    def _follows(req, u, m, qs):
+        return {"items": d.my_follows(u)}
+
+    @route("GET", r"/api/dms/activity")
+    def _activity(req, u, m, qs):
+        return {"items": d.activity(u, min(int(q1(qs, "limit", 40)), 100))}
+
     @route("GET", r"/api/dms/calendar")
     def _calendar(req, u, m, qs):
         return d.calendar(u, q1(qs, "month"))
@@ -325,6 +355,14 @@ def build_routes(app):
     @route("GET", r"/api/dms/admin/stats")
     def _stats(req, u, m, qs):
         return d.admin_stats(u)
+
+    @route("GET", r"/api/dms/admin/users")
+    def _admin_users(req, u, m, qs):
+        return d.admin_users(u)
+
+    @route("GET", r"/api/dms/admin/system")
+    def _admin_system(req, u, m, qs):
+        return d.system_status(u)
 
     @route("POST", r"/api/dms/admin/maintenance")
     def _maint(req, u, m, qs):

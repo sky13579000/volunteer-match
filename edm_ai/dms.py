@@ -16,6 +16,9 @@ from .ingest import SUPPORTED, read_file
 from .models import Acl
 from .safety import redact_pii
 from .store import MANAGED_PREFIX
+
+FOLLOW_TEXT = {"new_version": "새 버전이 올라왔습니다", "restored": "이전 버전이 복원되었습니다", "approved_step": "결재가 진행되었습니다", "rejected": "결재가 반려되었습니다",
+               "commented": "새 댓글이 달렸습니다", "moved": "다른 폴더로 이동되었습니다", "acl_changed": "접근 권한이 변경되었습니다"}
 from .text import chunk_text
 
 ROLE_RANK = {"viewer": 1, "editor": 2, "manager": 3}
@@ -473,6 +476,8 @@ class DmsCore:
         uid = p if isinstance(p, str) else p.id
         self.store.add_history(row["source"], uid, action, detail)
         self.store.log_audit(uid, f"[{action}] {row['doc_no'] or row['source']}", [row["source"]], False, "dms")
+        if action in FOLLOW_TEXT and row["origin"] == "managed":
+            self.notify_followers(row, FOLLOW_TEXT[action], uid)
 
     # ---------------- summaries ----------------
     def summary(self, p, row, with_perms=True) -> dict:

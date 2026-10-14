@@ -1,9 +1,11 @@
 import { $, renderMd, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { folderOptions } from "./v-docs.js";
+import { requestDialog } from "./v-social.js";
+import { icon } from "./icons.js";
 
-const TABS = [["info", "개요"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["history", "이력"]];
+const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["history", "이력"]];
 const ACTION = { registered: "등록", new_version: "새 버전", restored: "버전 복원", submitted: "결재 요청", approved_step: "결재 승인", rejected: "반려", delegated: "결재 위임",
-  workflow_cancelled: "결재 회수", checked_out: "체크아웃", checkout_cancelled: "체크아웃 해제", downloaded: "다운로드", acl_changed: "권한 변경", meta_changed: "정보 변경", moved: "이동",
+  workflow_cancelled: "결재 회수", checked_out: "체크아웃", checkout_cancelled: "체크아웃 해제", downloaded: "다운로드", acl_changed: "권한 변경", access_requested: "권한 신청", access_granted: "권한 승인", access_denied: "권한 거절", meta_changed: "정보 변경", moved: "이동",
   deleted: "삭제", restored_from_trash: "휴지통 복원", legal_hold_on: "법적 보류", legal_hold_off: "법적 보류 해제", expired: "만료", expiry_changed: "만료일 변경", commented: "댓글",
   comment_deleted: "댓글 삭제", linked: "문서 연결", unlinked: "연결 해제", share_created: "공유 링크 생성", share_revoked: "공유 링크 폐지", share_viewed: "공유 열람", share_downloaded: "공유 다운로드", indexed: "색인" };
 
@@ -27,6 +29,8 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
         : act("체크아웃", async () => { await api(`/api/docs/${id}/checkout`, { method: "POST", body: {} }); toast("체크아웃했습니다. 다른 사용자는 새 버전을 올릴 수 없습니다"); reload(); }));
       if (["draft", "rejected"].includes(d.status) && !d.workflow?.status?.startsWith("pending") && d.workflow?.status !== "pending") actions.push(act("결재 요청", () => submitDialog(d, reload), "primary"));
     }
+    actions.push(act(d.following ? "구독 해제" : "구독", async () => { await api(`/api/docs/${id}/follow`, { method: "POST", body: { on: !d.following } }); toast(d.following ? "구독을 해제했습니다" : "새 버전·댓글·결재 알림을 받습니다"); reload(); }));
+    if (!can("edit") && d.origin === "managed") actions.push(act("편집 권한 신청", () => requestDialog(d.doc_no, "editor")));
     actions.push(act(d.favorite ? "★ 즐겨찾기 해제" : "☆ 즐겨찾기", async () => { await api(`/api/docs/${id}/favorite`, { method: "POST", body: { on: !d.favorite } }); reload(); }));
     if (can("edit") && d.origin === "managed") actions.push(act("이동", () => moveDialog(d, reload)));
   }
@@ -43,7 +47,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     return;
   }
   const alerts = d.analysis?.findings || [];
-  const body = { info: infoTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, history: historyTab }[tab] || infoTab;
+  const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, history: historyTab }[tab] || infoTab;
   const panel = el("div", { role: "tabpanel" });
   view.replaceChildren(head,
     alerts.length ? el("div", { class: "card sec" }, el("b", { class: "bad" }, `업무 DB와 불일치 ${alerts.length}건`), alerts.map((f) => el("p", { class: "flush" }, pill(f.severity === "high" ? "높음" : "중간", f.severity === "high" ? "bad" : "warn"), " " + f.message))) : "",
@@ -52,6 +56,25 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     panel);
   panel.append(await body(d, reload));
 });
+
+function askTab(d) {
+  const q = el("input", { id: "doc-q", placeholder: "이 문서에 대해 질문하세요 (예: 지체상금 조항은?)", "aria-label": "문서에 질문" });
+  const out = el("div", { class: "sec" });
+  const go1 = async () => {
+    if (!q.value.trim()) return;
+    out.replaceChildren(el("p", { class: "hint" }, "찾는 중..."));
+    try {
+      const a = await api(`/api/docs/${d.id}/ask`, { method: "POST", body: { question: q.value } });
+      out.replaceChildren(el("div", { class: "a" + (a.refused ? " refused" : "") }, a.answer.split("\n").map((l) => el("p", {}, l)),
+        el("div", { class: "hint" }, a.refused ? (d.status === "approved" ? "이 문서에서 근거를 찾지 못했습니다" : "결재가 끝나 승인된 버전만 AI 답변에 쓰입니다") : `${a.evidence.length}건의 근거 · 이 문서${a.evidence.some((e) => e.kind === "row") ? "와 연결된 업무 DB 행" : ""}만 사용`)),
+      ...a.evidence.map((e) => el("div", { class: "ev " + e.kind }, el("b", {}, `[${e.id}] ${e.title}`), el("div", { class: "ref" }, e.ref), el("div", { class: "t" }, e.text),
+        e.masked_columns.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + e.masked_columns.join(", ")) : "")));
+    } catch (e) { out.replaceChildren(el("p", { class: "err" }, e.message)); }
+  };
+  q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); go1(); } });
+  return el("div", {}, el("p", { class: "hint" }, "이 문서의 내용만으로 답합니다. 내가 볼 수 없는 내용은 답에 쓰이지 않습니다."),
+    el("div", { class: "row" }, el("div", { class: "grow" }, q), el("button", { class: "primary", onclick: go1 }, icon("sparkles", 16), "질문")), out);
+}
 
 /** Body preview: Markdown documents are rendered, everything else is plain text. Confidential documents carry a viewer watermark. */
 function bodyView(d) {

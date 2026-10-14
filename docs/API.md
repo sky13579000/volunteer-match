@@ -66,6 +66,22 @@
 ### 질의응답 · 공개 공유
 `POST /api/ask {question}` → 답변 + 근거(`evidence[]`, 문서 근거에는 `doc_id`). 공개: `GET /s/{token}`(페이지), `GET /api/share/{token}`, `POST /api/share/{token}/access|download {password}` — 로그인 불필요, IP별 요청 제한.
 
+
+### v0.5 추가 API
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/dms/calendar?month=YYYY-MM` | 일정 캘린더: 만료·보존 종료·문서상 납기·업무DB 계약 납기·내게 온 결재. 권한 없는 문서/행은 나오지 않음 |
+| GET | `/api/dms/templates` | 양식 목록 (`config.json` 의 `templates` 로 추가/대체) |
+| POST | `/api/dms/templates/render` | `{template_id, values, title}` → `{title, filename, doc_type, tags, text}` (등록은 `POST /api/docs`) |
+| GET/PUT | `/api/docs/{id}/text` | 텍스트(.md/.txt) 문서 온라인 편집: 읽기 / `{text, comment}` 저장 = 새 버전 (결재·체크아웃 규칙 그대로) |
+| POST | `/api/docs/{id}/ask` | `{question}` 이 문서(와 연결된 DB 행)만으로 답변. 내가 읽을 수 없으면 404 |
+| POST/GET | `/api/dms/access-requests` | 권한 신청 `{ref(문서번호), role: viewer\|editor, reason}` — 존재 여부와 무관하게 같은 응답 / 내 신청·내가 처리할 신청 |
+| POST | `/api/dms/access-requests/{id}/decide` | `{approve, note}` — 문서 권한 관리자만. 승인하면 해당 사용자 항목이 문서 권한에 추가됨 |
+| POST | `/api/docs/{id}/follow` · GET `/api/dms/follows` | 문서 구독(새 버전·댓글·결재·이동·권한 변경 알림) / 내 구독 목록 |
+| GET | `/api/dms/activity?limit=` | 내가 읽을 수 있는 문서의 최근 활동 |
+| GET | `/api/dms/admin/users` · `/api/dms/admin/system` | (관리자) 사용자·조직 현황 / 시스템 상태(감사 체인, 색인, LLM, 메일, 연동) |
+| POST | `/api/adapters/groupware` | 그룹웨어 결재 완료 문서 수신 (서명 필요, `docs/INTEGRATION.md`) |
+
 ## 권한 모델 요약
 - **읽기 범위(ACL)** 는 `entries`(폴더 상속 + 문서 직접 지정) + 보안등급 + **생명주기 상태**에서 도출됩니다. 승인 전(작성 중·결재 중·반려)·만료 문서는 소유자·편집 권한자·현재 결재자만 읽습니다. 검색·AI 답변·목록이 모두 같은 함수를 씁니다.
 - 역할: 열람(읽기·다운로드·댓글) < 편집(+새 버전·정보 수정·결재 요청) < 관리(+권한·삭제·외부 공유). 소유자는 항상 관리. `deny` 항목은 모든 허용을 이깁니다.

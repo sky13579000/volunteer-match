@@ -7,8 +7,12 @@ const docLink = (d, label) => el("button", { class: "link", onclick: () => open(
 
 // ---------------- dashboard ----------------
 route(/^\/dashboard$/, async (view) => {
-  const d = await api("/api/dms/dashboard");
+  const [d, feed, follows] = await Promise.all([api("/api/dms/dashboard"), api("/api/dms/activity?limit=8").catch(() => ({ items: [] })), api("/api/dms/follows").catch(() => ({ items: [] }))]);
   const c = d.counts;
+  const ACT = { registered: "등록했습니다", new_version: "새 버전을 올렸습니다", restored: "이전 버전을 복원했습니다", submitted: "결재를 요청했습니다", approved_step: "결재를 승인했습니다", rejected: "반려했습니다",
+    commented: "댓글을 남겼습니다", moved: "문서를 이동했습니다", acl_changed: "권한을 변경했습니다", meta_changed: "정보를 수정했습니다", deleted: "삭제했습니다", expired: "만료되었습니다", checked_out: "체크아웃했습니다", legal_hold_on: "법적 보류를 지정했습니다", legal_hold_off: "법적 보류를 해제했습니다", access_requested: "접근 권한을 신청했습니다", access_granted: "접근 권한을 승인했습니다", access_denied: "접근 권한 신청을 거절했습니다",
+    share_created: "외부 공유 링크를 만들었습니다", share_revoked: "외부 공유 링크를 폐지했습니다", linked: "관련 문서를 연결했습니다", unlinked: "문서 연결을 해제했습니다", workflow_cancelled: "결재를 회수했습니다", delegated: "결재를 위임했습니다",
+    restored_from_trash: "휴지통에서 복원했습니다", expiry_changed: "만료일을 변경했습니다", checkout_cancelled: "체크아웃을 해제했습니다", comment_deleted: "댓글을 삭제했습니다" };
   const kpi = (n, label, ic, hot, href) => el("a", { class: "kpi" + (hot && n ? " hot" : ""), href: href || "#/dashboard" }, icon(ic, 26), el("b", {}, fmtNum(n)), el("span", {}, label));
   const bars = (items, key, label) => { const max = Math.max(1, ...items.map((i) => i.count)); return el("div", { class: "bars" }, items.length ? items.map((i) => el("div", { class: "bar" }, el("span", {}, label(i)), el("div", { class: "tr" }, el("i", { "data-w": Math.round((i.count / max) * 100) })), el("span", {}, i.count))) : empty("데이터 없음", "chart")); };
   const hour = new Date().getHours();
@@ -26,6 +30,9 @@ route(/^\/dashboard$/, async (view) => {
       el("div", { class: "card" }, el("h3", {}, icon("alert", 15), "만료 예정 (30일 이내)"), d.expiring.length ? table(["문서", "만료일"], d.expiring.map((t) => [docLink(t), t.expires_at])) : empty("만료 예정 문서가 없습니다", "calendar")),
       el("div", { class: "card" }, el("h3", {}, icon("history", 15), "최근 본 문서"), d.recent.length ? table(["문서", "수정일"], d.recent.map((t) => [docLink(t), fmtDay(t.updated)])) : empty("아직 없습니다", "history")),
       el("div", { class: "card" }, el("h3", {}, icon("star", 15), "즐겨찾기"), d.favorites.length ? table(["문서", "상태"], d.favorites.map((t) => [docLink(t), statusPill(t.status)])) : empty("즐겨찾기한 문서가 없습니다", "star")),
+      el("div", { class: "card" }, el("h3", {}, icon("history", 15), "최근 활동"), feed.items.length ? el("div", { class: "feed" }, feed.items.map((a) => el("div", { class: "feed-i" }, el("span", { class: "avatar" }, (a.user_name || "?").slice(0, 1)),
+        el("div", { class: "feed-t" }, el("b", {}, a.user_name), ` ${ACT[a.action] || a.action} `, docLink({ id: a.doc_id }, `${a.doc_no} ${a.title}`), el("div", { class: "hint" }, fmtDate(a.ts)))))) : empty("최근 활동이 없습니다", "history")),
+      el("div", { class: "card" }, el("h3", {}, icon("eye", 15), "구독 중인 문서"), follows.items.length ? table(["문서", "상태"], follows.items.map((t) => [docLink(t), statusPill(t.status)])) : empty("문서 화면의 '구독'을 누르면 변경 알림을 받습니다", "eye")),
       el("div", { class: "card" }, el("h3", {}, icon("chart", 15), "유형별 문서"), bars(d.by_type, "code", (i) => i.name), el("h3", { class: "sec" }, "상태별"), bars(d.by_status, "status", (i) => STATUS[i.status]?.[0] || i.status),
         el("p", { class: "hint sec" }, `저장 용량 ${fmtSize(d.storage_bytes)} (${d.storage_scope === "all" ? "전체" : "내 문서"})`))));
   for (const i of view.querySelectorAll("i[data-w]")) i.style.width = i.dataset.w + "%";     // widths set via CSSOM (the CSP forbids inline style attributes)
@@ -54,7 +61,7 @@ route(/^\/trash$/, async (view) => {
 route(/^\/notifications$/, async (view) => {
   const n = await api("/api/dms/notifications");
   const prefs = await api("/api/dms/prefs");
-  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""] };
+  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"] };
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }),
     prefs.email_available ? el("label", { class: "inline" }, el("input", { type: "checkbox", id: "pref-email", checked: prefs.email, onchange: async (e) => { try { await api("/api/dms/prefs", { method: "PUT", body: { email: e.target.checked } }); toast(e.target.checked ? "메일 알림을 켰습니다" : "메일 알림을 껐습니다"); } catch (x) { fail(x); } } }), "메일로도 받기") : "",
     el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),
@@ -64,6 +71,7 @@ route(/^\/notifications$/, async (view) => {
 export async function refreshBell() {
   try { const n = await api("/api/dms/notifications?unread=1"); const b = document.getElementById("bell-n"); b.textContent = String(n.unread); b.hidden = !n.unread; } catch { /* ignore */ }
   try { const t = await api("/api/dms/tasks"); setNavBadge("tasks", t.tasks.length); } catch { /* ignore */ }
+  try { const a = await api("/api/dms/access-requests"); setNavBadge("access", a.to_decide.length); } catch { /* ignore */ }
 }
 
 // ---------------- automation alerts ----------------

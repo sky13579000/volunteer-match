@@ -19,6 +19,10 @@ KINDS = {
     "expired": "문서가 만료되었습니다",
     "mention": "문서에서 회원님이 언급되었습니다",
     "comment": "내 문서에 댓글이 달렸습니다",
+    "follow_update": "구독 중인 문서가 변경되었습니다",
+    "access_request": "문서 접근 권한 신청이 도착했습니다",
+    "access_granted": "문서 접근 권한 신청이 승인되었습니다",
+    "access_denied": "문서 접근 권한 신청이 거절되었습니다",
 }
 
 

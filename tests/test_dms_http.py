@@ -108,7 +108,7 @@ class Lifecycle(HttpBase):
         self.assertEqual(self.call("POST", f"/api/docs/{d['id']}/comments", "kim", {"text": "댓글"})[0], 200)
         self.assertEqual(self.call("POST", f"/api/docs/{d['id']}/comments", "choi", {"text": "침입"})[0], 404)
         self.assertEqual(self.call("POST", f"/api/docs/{d['id']}/favorite", "kim", {"on": True})[1], {"favorite": True})
-        self.assertEqual([x["id"] for x in self.call("GET", "/api/dms/favorites", "kim")[1]][-1], d["id"])
+        self.assertEqual([x["id"] for x in self.call("GET", "/api/dms/favorites", "kim")[1]][0], d["id"])
         self.assertEqual(self.call("DELETE", f"/api/docs/{d['id']}", "kim")[0], 200)
         self.assertEqual(self.call("GET", f"/api/docs/{d['id']}", "kim")[0], 404)
         self.assertIn(d["id"], [t["id"] for t in self.call("GET", "/api/dms/trash", "kim")[1]])

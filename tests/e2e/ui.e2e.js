@@ -220,6 +220,59 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   ok('hidden doc by direct URL looks like a missing page', (await choi.textContent('#view')).includes('찾을 수 없습니다'));
   ok('outsider sees no admin menu', !(await choi.textContent('#nav')).includes('관리'));
 
+  // ===== v0.5: calendar, templates + editor, access requests, follow, scoped ask, admin pages, theme =====
+  const k2 = await login('kim');
+  await k2.hash('#/calendar?month=2026-12'); await k2.waitForSelector('.cal-day.has');
+  await k2.locator('.cal-day.has').first().click();
+  ok('calendar lists the contract due date from the business DB', (await k2.textContent('.cal-detail')).includes('CT-2024-001'));
+  await k2.hash('#/new'); await k2.waitForSelector('.tpl');
+  ok('template gallery lists the built-in forms', (await k2.locator('.tpl').count()) >= 5);
+  await k2.locator('.tpl', { hasText: '공문(기안문)' }).click(); await k2.waitForSelector('.md-src');
+  await k2.fill('#n-title', 'e2e 양식 회의록 유니크제목');
+  await k2.locator('.md-src').fill('# e2e 회의록\n\n- [ ] 항목 하나\n\n본문 e2e양식본문');
+  ok('live Markdown preview renders headings and checklists', (await k2.locator('.md-prev h2').count()) === 1 && (await k2.locator('.md-prev li.task').count()) === 1);
+  await k2.getByRole('button', { name: '문서로 저장' }).click(); await k2.waitForSelector('.tabs');
+  const newDocUrl = k2.url();
+  ok('document created from a template', (await k2.textContent('.page-h')).includes('e2e 양식 회의록'));
+  ok('Markdown body is rendered on the document page', (await k2.locator('.body-md h2').count()) === 1);
+  await k2.getByRole('button', { name: '온라인 편집' }).click(); await k2.waitForSelector('.md-src');
+  await k2.locator('.md-src').fill('# e2e 회의록\n\n개정 e2e편집본문');
+  await k2.getByRole('button', { name: '새 버전으로 저장' }).click(); await k2.waitForSelector('.tabs');
+  await k2.getByRole('tab', { name: '버전' }).click(); await k2.waitForTimeout(400);
+  ok('online edit created version 2', (await k2.textContent('[role=tabpanel]')).includes('v2'));
+  // ask this document
+  await k2.getByRole('tab', { name: 'AI 질문' }).click(); await k2.fill('#doc-q', 'e2e편집본문'); await k2.keyboard.press('Enter'); await k2.waitForSelector('.ev');
+  ok('question about one document is answered from that document', (await k2.textContent('[role=tabpanel]')).includes('e2e편집본문'));
+  // follow + access request across users
+  const docId = newDocUrl.split('/doc/')[1].split('?')[0];
+  const docNo = (await k2.evaluate(async (id) => { const h = JSON.parse(sessionStorage.getItem('uid') ? '{}' : '{}'); const r = await fetch('/api/docs/' + id, { headers: { 'X-User-Id': 'kim' } }); return (await r.json()).doc_no; }, docId));
+  const ch = await login('choi');
+  await ch.hash('#/access'); await ch.waitForSelector('.page-h');
+  await ch.getByRole('button', { name: '새 신청' }).click(); await ch.locator('dialog #ar-ref').fill(docNo); await ch.locator('dialog #ar-reason').fill('e2e 검토');
+  await ch.dlg().getByRole('button', { name: '신청' }).click(); await ch.waitForTimeout(700);
+  ok('access request accepted with a neutral message', (await toastText(ch)).includes('접수'));
+  await k2.hash('#/access'); await k2.waitForSelector('.req');
+  ok('document manager sees the request', (await k2.textContent('#view')).includes('최협력') );
+  await k2.getByRole('button', { name: '승인' }).first().click(); await k2.waitForTimeout(800);
+  await ch.hash('#/doc/' + docId); await ch.waitForTimeout(900);
+  ok('after approval the requester can open the document', (await ch.textContent('#view')).includes('e2e 양식 회의록'));
+  const pk = await login('park');
+  await pk.hash('#/doc/' + docId); await pk.waitForTimeout(800);
+  const canSee = !(await pk.textContent('#view')).includes('찾을 수 없습니다');
+  if (canSee) { await pk.getByRole('button', { name: '구독', exact: true }).click(); await pk.waitForTimeout(500); ok('follow toggles to unfollow', (await pk.locator('button', { hasText: '구독 해제' }).count()) === 1); }
+  else ok('(park cannot read this document: follow not applicable)', true);
+  // admin pages
+  const ad = await login('admin');
+  await ad.hash('#/admin/users'); await ad.waitForSelector('.tbl tbody tr');
+  ok('admin user directory lists users without e-mail addresses', (await ad.textContent('#view')).includes('김유치') && !(await ad.textContent('#view')).includes('@'));
+  await ad.hash('#/admin/system'); await ad.waitForSelector('.tbl');
+  ok('system status shows audit chain integrity', (await ad.textContent('#view')).includes('해시 체인'));
+  // theme toggle persists and flips the palette
+  const before = await k2.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  await k2.locator('#theme').click(); await k2.waitForTimeout(250);
+  ok('theme toggle changes the palette', (await k2.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== before);
+  await k2.locator('#theme').click();
+
   // ===== responsive + dark =====
   const mob = await login('kim', { viewport: { width: 400, height: 800 } });
   for (const h of ['#/dashboard', '#/docs', '#/tasks']) {

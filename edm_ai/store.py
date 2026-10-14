@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS notifications(
   id INTEGER PRIMARY KEY, user_id TEXT, kind TEXT, doc_id INTEGER, text TEXT, ts TEXT, read INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read);
 CREATE TABLE IF NOT EXISTS doc_links(a INTEGER, b INTEGER, created_by TEXT, ts TEXT, PRIMARY KEY(a, b));
+CREATE TABLE IF NOT EXISTS access_requests(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, requester TEXT, role TEXT, reason TEXT DEFAULT '', status TEXT DEFAULT 'pending',
+  decided_by TEXT, decided_at TEXT, note TEXT DEFAULT '', created TEXT, ref TEXT);
+CREATE INDEX IF NOT EXISTS ix_access_status ON access_requests(status, requester);
+CREATE TABLE IF NOT EXISTS follows(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS recent(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));

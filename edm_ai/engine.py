@@ -44,7 +44,7 @@ class Engine:
                 dense = None  # embedder down: fall back to fuzzy vectors rather than failing
         self.index = Index(docs, chunks, dense, min_coverage=self.min_coverage, cache=self._analysis_cache)
 
-    def ask(self, p: Principal, question: str, k: int = 5) -> Answer:
+    def ask(self, p: Principal, question: str, k: int = 5, only_source: str | None = None) -> Answer:
         q_ents = self.extractor.extract(question)
         qvec = None
         if self.embedder and self.index.dense is not None:
@@ -52,7 +52,11 @@ class Engine:
                 qvec = self.embedder.embed([question])[0]
             except Exception:
                 qvec = None
-        hits = self.index.search(p, question, q_ents, k=k, qvec=qvec)
+        only = None
+        if only_source is not None:
+            d = self.index.by_source.get(only_source)
+            only = frozenset({d.id}) if d else frozenset()
+        hits = self.index.search(p, question, q_ents, k=k, qvec=qvec, only_docs=only)
 
         # Hop: entities found in the best documents become structured-DB lookups.
         hop = set(q_ents)
@@ -75,7 +79,7 @@ class Engine:
             evidence.append(Evidence(f"E{len(evidence) + 1}", "row", r["title"], body,
                                      f"{r['table']}:{r['key']}", masked=r["masked"]))
 
-        if self.gateway:
+        if self.gateway and only_source is None:       # company-wide aggregates do not belong in an answer about ONE document
             for m in self.gateway.metrics_for(question):
                 agg = self.gateway.aggregate(p, m, q_ents)  # scope = what the user asked, not doc-hop guesses
                 if agg:

@@ -90,10 +90,10 @@ class CollabMixin:
         return out
 
     def favorites(self, p) -> list[dict]:
-        return self._docs_from(p, [r["doc_id"] for r in self.q("SELECT doc_id FROM favorites WHERE user_id=? ORDER BY ts DESC", (p.id,))])
+        return self._docs_from(p, [r["doc_id"] for r in self.q("SELECT doc_id FROM favorites WHERE user_id=? ORDER BY ts DESC, rowid DESC", (p.id,))])
 
     def recent(self, p, limit=10) -> list[dict]:
-        return self._docs_from(p, [r["doc_id"] for r in self.q("SELECT doc_id FROM recent WHERE user_id=? ORDER BY ts DESC LIMIT ?", (p.id, limit * 3))])[:limit]
+        return self._docs_from(p, [r["doc_id"] for r in self.q("SELECT doc_id FROM recent WHERE user_id=? ORDER BY ts DESC, rowid DESC LIMIT ?", (p.id, limit * 3))])[:limit]
 
     # ---- related documents ----
     def _resolve(self, p, other) -> dict:

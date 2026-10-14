@@ -3,15 +3,16 @@ import "./v-docs.js";
 import "./v-doc.js";
 import "./v-cal.js";
 import "./v-edit.js";
+import "./v-social.js";
 import { refreshBell } from "./v-misc.js";
 import { icon } from "./icons.js";
 
 const NAV = [
   ["", [["#/dashboard", "대시보드", "home"], ["#/chat", "AI 질의응답", "sparkles"]]],
   ["문서", [["#/docs", "문서함", "folder"], ["#/docs?favorites=1", "즐겨찾기", "star"], ["#/docs?mine=1", "내가 올린 문서", "user"], ["#/trash", "휴지통", "trash"]]],
-  ["업무", [["#/tasks", "결재함", "task", "tasks"], ["#/notifications", "알림", "bell"], ["#/calendar", "일정 캘린더", "calendar"], ["#/alerts", "문서↔DB 불일치", "alert"]]],
+  ["업무", [["#/tasks", "결재함", "task", "tasks"], ["#/access", "권한 신청", "key", "access"], ["#/notifications", "알림", "bell"], ["#/calendar", "일정 캘린더", "calendar"], ["#/alerts", "문서↔DB 불일치", "alert"]]],
 ];
-const ADMIN = ["관리", [["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
+const ADMIN = ["관리", [["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
 
 function buildNav() {
   const groups = state.me.is_admin ? [...NAV, ADMIN] : NAV;

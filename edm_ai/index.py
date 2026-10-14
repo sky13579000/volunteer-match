@@ -74,8 +74,10 @@ class Index:
         return scores
 
     def search(self, p: Principal, query: str, entities: frozenset, k: int = 5, rel_cutoff: float = 0.3,
-               per_doc: int = 2, qvec: list[float] | None = None) -> list[tuple[Chunk, float]]:
+               per_doc: int = 2, qvec: list[float] | None = None, only_docs: frozenset | None = None) -> list[tuple[Chunk, float]]:
         allowed = self.allowed(p)
+        if only_docs is not None:                      # scope can only NARROW what the caller may already read
+            allowed = {i for i in allowed if self.chunks[i].doc_id in only_docs}
         if not allowed:
             return []
         bm = self._bm25(allowed, query, entities)

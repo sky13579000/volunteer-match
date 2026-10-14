@@ -157,6 +157,19 @@ class SearchMixin:
             "storage_bytes": size, "storage_scope": "all" if self.admin(p) else "mine",
         }
 
+    def ask_doc(self, p, doc_id, question) -> dict:
+        """Question answered from ONE document only. The scope narrows the caller's normal permissions; it cannot widen them."""
+        row = self.get_row(p, doc_id, "read")
+        q = str(question or "").strip()[:2000]
+        if not q:
+            raise DmsError(400, "질문을 입력하세요")
+        if row["origin"] == "managed" and not self.view_ver(p, row):
+            raise DmsError(404, "문서를 찾을 수 없습니다")
+        ans = self.app.engine.ask(p, q, only_source=row["source"])
+        out = ans.to_dict()
+        out["doc"] = {"id": row["id"], "doc_no": row["doc_no"], "title": row["title"]}
+        return out
+
     # ---------- document <-> DB cross-check alerts ----------
     def alerts(self, p) -> list[dict]:
         out = []
