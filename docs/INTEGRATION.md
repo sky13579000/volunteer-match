@@ -89,6 +89,17 @@ curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H 
 ```
 사번으로 기안자를 찾으려면 `sync-users` 매핑에 `"external_fields": {"empno": "사번"}` 를 두세요. 단점/주의: 첨부가 base64 로 안 오는 경우(URL 방식)는 현재 직접 내려받지 않으므로 중계 서버에서 받아 넣어 주어야 합니다.
 
+## 5. API 키와 송신 웹훅 (v0.6)
+**API 키** — 관리자 화면 *연동 관리*에서 발급. 사용자 한 명의 권한으로 동작하며 `read`(GET만) / `write` 범위, 유효기간(최대 365일), 즉시 폐기를 지원합니다. 키는 해시만 저장하고 발급 시 한 번만 보여 줍니다. **관리 API(`/api/dms/admin/*`, 감사)에는 관리자 계정의 키라도 접근할 수 없습니다.** 사용: `Authorization: Bearer edmk_...` (`edm_ai.client.EdmClient(url, token=키)`).
+
+**송신 웹훅** — 플랫폼에서 일어난 일을 다른 시스템에 알립니다(예: 승인 완료 → 그룹웨어/ERP).
+```json
+"events": {"include_title": false, "webhooks": [
+  {"name": "groupware", "url": "https://gw.example/edm-hook", "secret_env": "EDM_AI_HOOK_GW", "events": ["doc.approved", "doc.rejected", "doc.created"]}]}
+```
+이벤트: `doc.created, doc.version_added, doc.approved, doc.rejected, doc.deleted, doc.expired, doc.acl_changed, doc.moved, doc.legal_hold, doc.legal_hold_released, approval.requested, access.requested, access.granted, privacy.detected, disposal.completed, ping`.
+전송은 JSON POST이며 헤더 `X-EDM-Timestamp`, `X-EDM-Signature`(= `sha256=HMAC(비밀값, 타임스탬프 + "." + 본문)`), `X-EDM-Event`, `X-EDM-Delivery`(중복 제거용 ID)를 포함합니다. 백그라운드로 최대 3회 재시도(4xx는 재시도 안 함)하며 요청 처리를 지연시키지 않습니다. 기본은 문서 제목을 보내지 않습니다(`include_title`). 비밀값이 16자 미만이면 해당 웹훅은 비활성화됩니다.
+
 ## 점검 체크리스트
 1. 조직도 동기화 미리보기 → 경고(미매핑 부서/등급 상한) 해소 → `--apply`
 2. SSO: 한 명의 이메일로 로그인 → `/api/me` 확인 → 등록 안 된 계정은 401 확인
