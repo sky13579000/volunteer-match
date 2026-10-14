@@ -1,0 +1,13 @@
+{
+  "name": "EDM-AI",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "python3 examples/demo/build_demo.py",
+  "forwardPorts": [8080],
+  "portsAttributes": {"8080": {"label": "EDM-AI 웹 UI", "onAutoForward": "openBrowser"}},
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-python.debugpy", "anthropic.claude-code"],
+      "settings": {"python.defaultInterpreterPath": "/usr/local/bin/python"}
+    }
+  }
+}

@@ -23,6 +23,13 @@ python3 -m edm_ai.cli -c cfg.json verify-audit                                  
 ```
 같은 질문도 사용자(`kim` 영업 / `park` 재무 / `lee` 인사 / `choi` 외부)에 따라 **보이는 문서·행·컬럼이 달라집니다.**
 
+## VS Code에서 열기
+1. VS Code로 `volunteer-match` 폴더를 열고, 오른쪽 아래 "권장 확장 설치" 알림에서 Python 확장을 설치합니다.
+2. **F5** → "EDM-AI 데모 실행" 을 고르면 데모 데이터 생성 + 서버 기동 + 브라우저 열기까지 자동입니다(중단점 디버깅 가능).
+3. `Ctrl+Shift+P` → "Tasks: Run Task" 에서 테스트 실행 / 평가 / Docker 스택 기동을 고를 수 있습니다. 왼쪽 비커(테스트) 아이콘에서도 테스트가 보입니다.
+4. 설치 없이 쓰려면 **Dev Container / GitHub Codespaces**로 여세요(`.devcontainer`). 포트 8080이 자동 전달되어 브라우저에서 바로 열립니다.
+5. Claude Code 확장(`anthropic.claude-code`)을 설치하면 VS Code 안에서 같은 저장소를 두고 Claude와 이어서 작업할 수 있습니다.
+
 ## 운영 배포
 ```bash
 # 1) 전체 스택 (PostgreSQL + EDM-AI + 웹 UI), http://localhost:8080

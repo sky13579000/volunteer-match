@@ -1,0 +1,54 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "EDM-AI 데모 실행 (F5)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "edm_ai",
+      "args": ["demo", "--port", "8080"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "EDM-AI 서버 (데모 설정, 수동)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "edm_ai",
+      "args": ["-c", "examples/demo/config.json", "serve", "--port", "8080", "--demo-login", "--ingest"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "질문 (CLI) - 영업 사용자",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "edm_ai",
+      "args": ["-c", "examples/demo/config.json", "ask", "-u", "kim", "${input:question}"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "평가 (골든셋)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "edm_ai",
+      "args": ["-c", "examples/demo/config.json", "eval", "examples/demo/golden.json"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "현재 테스트 파일 디버그",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": ["-v", "${file}"],
+      "console": "integratedTerminal"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "question",
+      "type": "promptString",
+      "description": "질문",
+      "default": "한빛전자 MES 계약 금액과 납기 지연 이슈는?"
+    }
+  ]
+}

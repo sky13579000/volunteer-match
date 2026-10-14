@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "데모 데이터 생성",
+      "type": "shell",
+      "command": "python3 examples/demo/build_demo.py",
+      "windows": {"command": "py examples/demo/build_demo.py"},
+      "problemMatcher": []
+    },
+    {
+      "label": "테스트 실행",
+      "type": "shell",
+      "command": "python3 -m unittest discover -s tests -v",
+      "windows": {"command": "py -m unittest discover -s tests -v"},
+      "group": {"kind": "test", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "평가 (권한 누출 0 확인)",
+      "type": "shell",
+      "command": "python3 -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json",
+      "windows": {"command": "py -m edm_ai -c examples/demo/config.json eval examples/demo/golden.json"},
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker 스택 기동 (PostgreSQL 포함)",
+      "type": "shell",
+      "command": "docker compose -f deploy/docker-compose.yml up -d --build",
+      "problemMatcher": []
+    }
+  ]
+}
