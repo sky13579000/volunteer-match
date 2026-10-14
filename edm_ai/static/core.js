@@ -204,3 +204,35 @@ export function renderMd(src) {
   }
   return root;
 }
+
+// ---------- presentation helpers ----------
+export const avatar = (name, cls = "") => el("span", { class: "avatar sm " + cls, "aria-hidden": "true" }, String(name || "?").slice(0, 1));
+export function relTime(iso) {
+  if (!iso) return "";
+  const t = new Date(iso.length <= 10 ? iso + "T00:00:00Z" : iso).getTime(), s = (Date.now() - t) / 1000;
+  if (!isFinite(s)) return iso;
+  if (s < 90) return "방금 전"; if (s < 3600) return `${Math.round(s / 60)}분 전`; if (s < 86400) return `${Math.round(s / 3600)}시간 전`;
+  if (s < 86400 * 8) return `${Math.round(s / 86400)}일 전`; return fmtDay(iso);
+}
+const EXT = { pdf: ["pdf", "red"], doc: ["file", "blue"], docx: ["file", "blue"], hwp: ["file", "blue"], xls: ["chart", "green"], xlsx: ["chart", "green"], csv: ["chart", "green"], md: ["file", "slate"], txt: ["file", "slate"],
+  eml: ["inbox", "orange"], png: ["eye", "purple"], jpg: ["eye", "purple"], jpeg: ["eye", "purple"], zip: ["layers", "slate"] };
+/** Coloured file-type tile. Pass a filename or an extension. */
+export function fileTile(name, size = 38) {
+  const ext = (String(name || "").split(".").pop() || "").toLowerCase();
+  const [ic, tone] = EXT[ext] || ["file", "slate"];
+  return el("span", { class: "ftile " + tone, "data-ext": ext.slice(0, 4).toUpperCase() }, icon(ic, Math.round(size * 0.5)));
+}
+/** Small dropdown menu anchored to a button. items: [{label, icon, run, danger}] or "-" for a divider. */
+export function menu(label, items, { ic = "chevron", cls = "" } = {}) {
+  const wrap = el("div", { class: "menu-wrap" });
+  const pop = el("div", { class: "menu", role: "menu", hidden: true });
+  const close = () => { pop.hidden = true; document.removeEventListener("click", onDoc, true); };
+  const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+  for (const it of items) {
+    if (it === "-") { pop.append(el("hr")); continue; }
+    pop.append(el("button", { type: "button", role: "menuitem", class: "menu-i" + (it.danger ? " danger" : ""), onclick: () => { close(); Promise.resolve(it.run()).catch(fail); } }, it.icon ? icon(it.icon, 16) : "", it.label));
+  }
+  const btn = el("button", { type: "button", class: cls, "aria-haspopup": "menu", onclick: () => { if (pop.hidden) { pop.hidden = false; document.addEventListener("click", onDoc, true); } else close(); } }, label, icon("chevron", 14));
+  wrap.append(btn, pop);
+  return wrap;
+}

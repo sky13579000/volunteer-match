@@ -1,4 +1,4 @@
-import { $, renderMd, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { $, renderMd, avatar, fileTile, menu, relTime, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { folderOptions } from "./v-docs.js";
 import { requestDialog } from "./v-social.js";
 import { icon } from "./icons.js";
@@ -18,29 +18,39 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
   const goTab = (t) => go(`#/doc/${id}?tab=${t}`);
 
   // ---------- header + actions ----------
-  const act = (label, fn, cls = "") => el("button", { type: "button", class: cls, onclick: () => Promise.resolve(fn()).catch(fail) }, label);
-  const actions = [];
+  const act = (label, fn, cls = "", ic = null) => el("button", { type: "button", class: cls, onclick: () => Promise.resolve(fn()).catch(fail) }, ic ? icon(ic, 16) : "", label);
+  const actions = [], more = [];
+  const submitNeeded = d.origin === "managed" && can("edit") && ["draft", "rejected"].includes(d.status) && !d.workflow?.status?.startsWith("pending") && d.workflow?.status !== "pending";
   if (d.readable !== false) {
-    if (can("download")) actions.push(act("다운로드", () => saveBlob(`/api/docs/${id}/download`, {}, d.title)));
+    const dl = can("download") ? () => saveBlob(`/api/docs/${id}/download`, {}, d.title) : null;
+    if (submitNeeded) actions.push(act("결재 요청", () => submitDialog(d, reload), "primary", "task"));
+    else if (dl) actions.push(act("다운로드", dl, "primary", "download"));
+    if (submitNeeded && dl) actions.push(act("다운로드", dl, "", "download"));
+    if (can("edit") && d.origin === "managed" && /\.(md|txt)$/i.test(d.versions?.[0]?.filename || "")) actions.push(act("온라인 편집", () => go(`#/doc/${id}/edit`), "", "edit"));
+    actions.push(act(d.following ? "구독 해제" : "구독", async () => { await api(`/api/docs/${id}/follow`, { method: "POST", body: { on: !d.following } }); toast(d.following ? "구독을 해제했습니다" : "새 버전·댓글·결재 알림을 받습니다"); reload(); }, d.following ? "on" : "", "eye"));
+    actions.push(act(d.favorite ? "즐겨찾기 해제" : "즐겨찾기", async () => { await api(`/api/docs/${id}/favorite`, { method: "POST", body: { on: !d.favorite } }); reload(); }, d.favorite ? "on" : "", "star"));
     if (can("edit") && d.origin === "managed") {
-      if (/\.(md|txt)$/i.test(d.versions?.[0]?.filename || "")) actions.push(act("온라인 편집", () => go(`#/doc/${id}/edit`)));
-      actions.push(act("새 버전 올리기", () => newVersionDialog(d, reload)));
-      actions.push(d.locked_by ? (d.locked_by === state.me.id || can("manage") ? act("체크아웃 해제", async () => { await api(`/api/docs/${id}/checkout/cancel`, { method: "POST", body: {} }); toast("해제했습니다"); reload(); }) : pill("잠김: " + d.locked_by, "warn"))
-        : act("체크아웃", async () => { await api(`/api/docs/${id}/checkout`, { method: "POST", body: {} }); toast("체크아웃했습니다. 다른 사용자는 새 버전을 올릴 수 없습니다"); reload(); }));
-      if (["draft", "rejected"].includes(d.status) && !d.workflow?.status?.startsWith("pending") && d.workflow?.status !== "pending") actions.push(act("결재 요청", () => submitDialog(d, reload), "primary"));
+      more.push({ label: "새 버전 올리기", icon: "upload", run: () => newVersionDialog(d, reload) });
+      if (d.locked_by) {
+        if (d.locked_by === state.me.id || can("manage")) more.push({ label: "체크아웃 해제", icon: "lock", run: async () => { await api(`/api/docs/${id}/checkout/cancel`, { method: "POST", body: {} }); toast("해제했습니다"); reload(); } });
+      } else more.push({ label: "체크아웃", icon: "lock", run: async () => { await api(`/api/docs/${id}/checkout`, { method: "POST", body: {} }); toast("체크아웃했습니다. 다른 사용자는 새 버전을 올릴 수 없습니다"); reload(); } });
+      more.push({ label: "이동", icon: "folder", run: () => moveDialog(d, reload) });
     }
-    actions.push(act(d.following ? "구독 해제" : "구독", async () => { await api(`/api/docs/${id}/follow`, { method: "POST", body: { on: !d.following } }); toast(d.following ? "구독을 해제했습니다" : "새 버전·댓글·결재 알림을 받습니다"); reload(); }));
-    if (!can("edit") && d.origin === "managed") actions.push(act("편집 권한 신청", () => requestDialog(d.doc_no, "editor")));
-    actions.push(act(d.favorite ? "★ 즐겨찾기 해제" : "☆ 즐겨찾기", async () => { await api(`/api/docs/${id}/favorite`, { method: "POST", body: { on: !d.favorite } }); reload(); }));
-    if (can("edit") && d.origin === "managed") actions.push(act("이동", () => moveDialog(d, reload)));
+    if (!can("edit") && d.origin === "managed") more.push({ label: "편집 권한 신청", icon: "key", run: () => requestDialog(d.doc_no, "editor") });
   }
-  if (can("delete") && d.origin === "managed") actions.push(act("삭제", async () => { if (await confirmDialog(`'${d.title}' 을(를) 휴지통으로 옮길까요?`, "삭제", true)) { await api("/api/docs/" + id, { method: "DELETE" }); toast("휴지통으로 이동했습니다"); go("#/docs"); } }, "danger"));
+  if (can("delete") && d.origin === "managed") { more.push("-"); more.push({ label: "삭제", icon: "trash", danger: true, run: async () => { if (await confirmDialog(`'${d.title}' 을(를) 휴지통으로 옮길까요?`, "삭제", true)) { await api("/api/docs/" + id, { method: "DELETE" }); toast("휴지통으로 이동했습니다"); go("#/docs"); } } }); }
+  if (more.length) actions.push(menu("더 보기", more));
 
-  const head = el("div", {},
-    el("div", { class: "hint" }, "문서함 / " + (d.folder_path || "")),
-    el("div", { class: "page-h" }, el("h1", {}, d.title), statusPill(d.status), d.legal_hold ? pill("법적 보류", "bad") : "", d.locked_by ? pill("체크아웃 " + d.locked_by, "warn") : "", d.props?.no_download ? pill("다운로드 제한", "warn") : ""),
-    el("div", { class: "hint" }, `${d.doc_no} · ${typeName(d.doc_type)} · 소유 ${userName(d.owner)} · 현행 ${d.effective_ver ? "v" + d.effective_ver : "없음"}${d.current_ver !== d.effective_ver ? ` / 최신 v${d.current_ver}` : ""}`),
-    el("div", { class: "row sec" }, actions));
+  const cur = d.versions?.[0]?.filename || d.source || d.title;
+  const head = el("div", { class: "doc-head" },
+    el("div", { class: "crumbs" }, el("button", { class: "link", onclick: () => go("#/docs") }, "문서함"), " / ", d.folder_path || ""),
+    el("div", { class: "dh-main" }, fileTile(cur, 56),
+      el("div", { class: "dh-t" }, el("h1", {}, d.title),
+        el("div", { class: "dh-chips" }, statusPill(d.status), d.legal_hold ? pill("법적 보류", "bad") : "", d.locked_by ? pill("체크아웃 " + d.locked_by, "warn") : "", d.props?.no_download ? pill("다운로드 제한", "warn") : "",
+          d.level >= 2 ? pill("보안등급 L" + d.level, "info") : "", d.expires_at ? pill("만료 " + d.expires_at, "") : ""),
+        el("div", { class: "dh-meta" }, el("span", { class: "ref" }, d.doc_no), el("span", {}, typeName(d.doc_type)), el("span", { class: "who" }, avatar(userName(d.owner)), userName(d.owner)),
+          el("span", {}, `현행 ${d.effective_ver ? "v" + d.effective_ver : "없음"}${d.current_ver !== d.effective_ver ? ` · 최신 v${d.current_ver}` : ""}`), el("span", { title: fmtDate(d.updated) }, "수정 " + relTime(d.updated))))),
+    el("div", { class: "dh-actions" }, actions));
   if (d.readable === false) {
     view.replaceChildren(head, el("p", { class: "hint sec" }, d.note || "이 문서의 내용을 읽을 권한이 없습니다. 관리자는 권한과 삭제만 관리할 수 있습니다."),
       can("acl") ? el("div", { class: "card sec" }, aclTab(d, reload)) : "");
@@ -153,8 +163,13 @@ function infoTab(d, reload) {
     [el("dt", {}, { contract_no: "계약번호", project: "행사", amount: "계약금액", due_date: "납기" }[k] || k), el("dd", {}, typeof v === "number" ? fmtNum(v) + "원" : v)]))) : "";
   const rows = d.linked_rows?.length ? el("div", { class: "sec" }, el("h3", {}, "연결된 업무 DB 행"), d.linked_rows.map((r) => el("div", { class: "ev row" }, el("b", {}, `${r.title} · ${r.key}`),
     el("div", { class: "t" }, Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join("\n")), r.masked.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + r.masked.join(", ")) : ""))) : "";
-  return el("div", {}, dl, el("div", { class: "row sec" }, lifecycle), a.summary ? el("div", { class: "sec" }, el("h3", {}, `자동 요약 · ${a.category}`), el("p", { class: "flush" }, a.summary)) : "",
-    fields, checks, rows, relatedBlock(d, reload), imagePreview(d), el("div", { class: "sec" }, el("h3", {}, `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? bodyView(d) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 열람 가능한 버전이 없습니다)")));
+  const main = el("div", { class: "info-main" },
+    a.summary ? el("div", { class: "card" }, el("h3", {}, icon("sparkles", 15), `자동 요약 · ${a.category}`), el("p", { class: "flush" }, a.summary)) : "",
+    fields ? el("div", { class: "card" }, fields) : "", checks ? el("div", { class: "card" }, checks) : "", rows ? el("div", { class: "card" }, rows) : "",
+    imagePreview(d), el("div", { class: "card" }, el("h3", {}, icon("eye", 15), `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? bodyView(d) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 내용이 비어 있습니다)", "file")),
+    el("div", { class: "card" }, relatedBlock(d, reload)));
+  const rail = el("aside", { class: "info-rail" }, el("div", { class: "card" }, el("h3", {}, icon("settings", 15), "속성"), dl, lifecycle.length ? el("div", { class: "row sec" }, lifecycle) : ""));
+  return el("div", { class: "info-grid" }, main, rail);
 }
 const can = (d, p) => (d.perms || []).includes(p);
 

@@ -87,7 +87,7 @@ route(/^\/chat$/, async (view) => {
   const key = "history:" + state.me.id;
   let hist = []; try { hist = JSON.parse(sessionStorage.getItem(key) || "[]"); } catch { /* ignore */ }
   const log = el("div"), ta = el("textarea", { id: "q", rows: "2", placeholder: "질문을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈). 열람 권한이 있는 승인 문서와 업무 DB만 근거로 사용합니다." });
-  const send = el("button", { class: "primary", id: "send" }, "질문");
+  const send = el("button", { class: "primary", id: "send" });
   const KIND = { doc: "문서", row: "DB", metric: "집계" };
   function cites(textv, box) {
     const p = el("p");
@@ -114,8 +114,15 @@ route(/^\/chat$/, async (view) => {
   }
   send.addEventListener("click", ask);
   ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
-  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "AI 질의응답")), el("p", { class: "hint" }, "결재 중인 초안과 만료·삭제된 문서의 내용은 답변에 쓰이지 않습니다. 모든 답변에는 출처가 붙고 감사 로그에 남습니다."),
-    el("div", { class: "row" }, (state.cfg.examples || []).map((t) => el("button", { class: "sm", onclick: () => { ta.value = t; ta.focus(); } }, t))), log, el("div", { class: "chatbox" }, ta, send));
+  const intro = el("div", { class: "chat-hero" }, el("span", { class: "chat-logo" }, icon("sparkles", 28)), el("h1", {}, "무엇이 궁금하세요?"),
+    el("p", { class: "hint" }, "내가 열람할 수 있는 승인 문서와 업무 DB만 근거로 답합니다. 모든 답변에는 출처가 붙고 감사 로그에 남습니다."),
+    el("div", { class: "ex-grid" }, (state.cfg.examples || []).slice(0, 6).map((t) => el("button", { class: "ex card", onclick: () => { ta.value = t; ta.focus(); } }, icon("search", 16), el("span", {}, t)))));
+  if (hist.length) intro.hidden = true;
+  const sendBtn = send; send.replaceChildren(icon("send", 18)); send.setAttribute("aria-label", "질문 전송"); send.classList.add("send-btn");
+  view.replaceChildren(el("div", { class: "chat-page" }, intro, log, el("div", { class: "composer" }, ta, sendBtn),
+    el("p", { class: "hint chat-note" }, "결재 중인 초안과 만료·삭제된 문서는 답변에 쓰이지 않습니다. 답변은 근거 발췌이며 중요한 판단은 원문을 확인하세요.")));
+  const hide = () => { intro.hidden = true; };
+  sendBtn.addEventListener("click", hide);
 });
 
 // ---------------- admin ----------------

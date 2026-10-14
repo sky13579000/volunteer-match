@@ -26,6 +26,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
     p.dlg = () => p.locator('dialog[open]');
     return p;
   }
+  const more = async (p, name) => { await p.getByRole('button', { name: '더 보기' }).click(); await p.getByRole('menuitem', { name }).click(); };
   const toastText = async (p) => (await p.locator('#toasts .toast').allTextContents()).join(' | ');
 
   // ===== kim: dashboard, register, approval request =====
@@ -43,7 +44,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   const docUrl = kim.url();
   ok('registered doc opens, number assigned', /CT-\d{4}-\d{4}/.test(await kim.textContent('#view')));
   ok('XSS payload not executed', !(await kim.evaluate(() => !!window.__xss)) && (await kim.$$('#view img')).length === 0);
-  ok('contract type starts as draft', (await kim.textContent('.page-h')).includes('작성 중'));
+  ok('contract type starts as draft', (await kim.textContent('.doc-head')).includes('작성 중'));
   ok('registered doc is linked to the business DB', (await kim.textContent('#view')).includes('연결된 업무 DB 행'));
   await kim.getByRole('button', { name: '결재 요청' }).click(); await kim.waitForSelector('#ap-park');
   await kim.check('#ap-park'); await kim.dlg().getByRole('button', { name: '요청', exact: true }).click();
@@ -66,10 +67,10 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.hash('#/notifications');
   ok('kim is notified of approval', (await kim.textContent('#view')).includes('승인:'));
   await kim.goto(docUrl); await kim.waitForSelector('.tabs');
-  ok('doc is now approved', (await kim.textContent('.page-h')).includes('승인'));
+  ok('doc is now approved', (await kim.textContent('.doc-head')).includes('승인'));
 
   // ===== versions + diff =====
-  await kim.getByRole('button', { name: '새 버전 올리기' }).click(); await kim.waitForSelector('#nv-file');
+  await more(kim, '새 버전 올리기'); await kim.waitForSelector('#nv-file');
   await kim.setInputFiles('#nv-file', FILES + '/contract_v2.md'); await kim.fill('#nv-comment', '제3조 신설');
   await kim.dlg().getByRole('button', { name: '올리기' }).click(); await kim.waitForTimeout(700);
   await kim.click('.tabs button:has-text("버전")'); await kim.waitForSelector('.tbl');
@@ -105,11 +106,11 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.fill('#rel-add', 'GEN-2026-0004'); await kim.click('#rel-go');
   await kim.waitForFunction(() => document.querySelector('#view')?.textContent.includes('GEN-2026-0004 2026 유치 계획'), null, { timeout: 5000 }).catch(() => {});
   ok('related document is linked', (await kim.textContent('#view')).includes('GEN-2026-0004 2026 유치 계획'));
-  ok('download button available before restriction', (await kim.$$('.page-h ~ .row button:has-text("다운로드")')).length >= 1);
+  ok('download button available before restriction', (await kim.$$('.dh-actions button:has-text("다운로드")')).length >= 1);
   await kim.getByRole('button', { name: '정보 편집' }).click(); await kim.waitForSelector('#m-nodl');
   await kim.check('#m-nodl'); await kim.dlg().getByRole('button', { name: '저장' }).click();
-  await kim.waitForFunction(() => document.querySelector('.page-h')?.textContent.includes('다운로드 제한'), null, { timeout: 5000 }).catch(() => {});
-  ok('download restriction badge shown', (await kim.textContent('.page-h')).includes('다운로드 제한'));
+  await kim.waitForFunction(() => document.querySelector('.doc-head')?.textContent.includes('다운로드 제한'), null, { timeout: 5000 }).catch(() => {});
+  ok('download restriction badge shown', (await kim.textContent('.doc-head')).includes('다운로드 제한'));
   ok('download button disappears under restriction', (await kim.$$('.row button:has-text("다운로드")')).length === 0);
   await kim.getByRole('button', { name: '정보 편집' }).click(); await kim.waitForSelector('#m-nodl'); await kim.uncheck('#m-nodl');
   await kim.dlg().getByRole('button', { name: '저장' }).click(); await kim.waitForTimeout(700);
@@ -137,7 +138,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.locator('.bulkbar').getByRole('button', { name: '태그 추가' }).click(); await kim.dlg().locator('input').fill('일괄태그');
   await kim.dlg().getByRole('button', { name: '추가' }).click(); await kim.waitForTimeout(800);
   ok('bulk tag applied', (await toastText(kim)).includes('2건 처리'));
-  await kim.hash('#/docs'); await kim.getByRole('button', { name: 'ZIP 일괄 등록' }).click(); await kim.waitForSelector('dialog[open] input[type=file]');
+  await kim.hash('#/docs'); await more(kim, 'ZIP 일괄 등록'); await kim.waitForSelector('dialog[open] input[type=file]');
   await kim.dlg().locator('input[type=file]').setInputFiles(FILES + '/bundle.zip');
   await kim.dlg().getByRole('button', { name: '등록 시작' }).click(); await kim.waitForSelector('dialog[open] .pill.ok');
   ok('zip import: created 2, skipped the .exe', (await kim.dlg().textContent()).includes('등록 2건') && (await kim.dlg().textContent()).includes('건너뜀 1건') && (await kim.dlg().textContent()).includes('bad.exe'));
@@ -146,7 +147,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   const zipRows = await kim.$$eval('.tbl tbody tr', r => r.length);
   ok('zip documents are searchable', zipRows === 2);
   await kim.locator('.tbl tbody tr').first().click(); await kim.waitForSelector('.tabs');
-  await kim.getByRole('button', { name: '삭제' }).click(); await kim.dlg().getByRole('button', { name: '삭제' }).click(); await kim.waitForSelector('.kpis, .tbl');
+  await more(kim, '삭제'); await kim.dlg().getByRole('button', { name: '삭제' }).click(); await kim.waitForSelector('.kpis, .tbl');
   await kim.hash('#/trash'); await kim.waitForSelector('.tbl');
   ok('deleted doc is in the trash', (await kim.$$eval('.tbl tbody tr', r => r.length)) >= 1);
   await kim.getByRole('button', { name: '복원' }).first().click(); await kim.waitForTimeout(700);
@@ -207,8 +208,8 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await adm.hash('#/docs'); await adm.waitForSelector('.tbl tbody tr');
   await adm.locator('.tbl tbody tr', { hasText: '정보보안' }).first().click(); await adm.waitForSelector('.tabs');
   await adm.getByRole('button', { name: '법적 보류', exact: true }).click(); await adm.dlg().locator('input').fill('e2e'); await adm.dlg().getByRole('button', { name: '확인' }).click(); await adm.waitForTimeout(700);
-  ok('legal hold shown', (await adm.textContent('.page-h')).includes('법적 보류'));
-  await adm.getByRole('button', { name: '삭제' }).click(); await adm.dlg().getByRole('button', { name: '삭제' }).click(); await adm.waitForTimeout(700);
+  ok('legal hold shown', (await adm.textContent('.doc-head')).includes('법적 보류'));
+  await more(adm, '삭제'); await adm.dlg().getByRole('button', { name: '삭제' }).click(); await adm.waitForTimeout(700);
   ok('legal hold blocks deletion', (await toastText(adm)).includes('법적 보류'));
 
   // ===== outsider cannot reach hidden documents even by URL =====
@@ -233,7 +234,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   ok('live Markdown preview renders headings and checklists', (await k2.locator('.md-prev h2').count()) === 1 && (await k2.locator('.md-prev li.task').count()) === 1);
   await k2.getByRole('button', { name: '문서로 저장' }).click(); await k2.waitForSelector('.tabs');
   const newDocUrl = k2.url();
-  ok('document created from a template', (await k2.textContent('.page-h')).includes('e2e 양식 회의록'));
+  ok('document created from a template', (await k2.textContent('.doc-head')).includes('e2e 양식 회의록'));
   ok('Markdown body is rendered on the document page', (await k2.locator('.body-md h2').count()) === 1);
   await k2.getByRole('button', { name: '온라인 편집' }).click(); await k2.waitForSelector('.md-src');
   await k2.locator('.md-src').fill('# e2e 회의록\n\n개정 e2e편집본문');

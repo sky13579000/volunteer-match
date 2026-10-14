@@ -1,4 +1,5 @@
-import { $, STATUS, api, aclEditor, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDay, fmtNum, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { $, STATUS, api, aclEditor, avatar, confirmDialog, dialog, el, empty, fail, field, fileTile, fileToB64, fmtDate, fmtDay, fmtNum, go, menu, pill, relTime, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { icon } from "./icons.js";
 
 // ---------------- helpers ----------------
 export function folderOptions(tree, { registerable = false } = {}) {
@@ -133,42 +134,53 @@ route(/^\/docs$/, async (view, _m, params) => {
   };
   const typeF = el("select", { "aria-label": "유형" }, [el("option", { value: "" }, "유형 전체"), ...state.meta.doc_types.map((t) => el("option", { value: t.code, selected: params.type === t.code }, t.name))]);
   const statusF = el("select", { "aria-label": "상태" }, [el("option", { value: "" }, "상태 전체"), ...[["draft", "작성 중"], ["in_review", "결재 중"], ["approved", "승인"], ["rejected", "반려"], ["expired", "만료"]].map(([v, l]) => el("option", { value: v, selected: params.status === v }, l))]);
-  const qIn = el("input", { type: "search", id: "list-q", value: params.q || "", placeholder: "키워드" });
+  const qIn = el("input", { type: "search", id: "list-q", value: params.q || "", placeholder: "제목 · 문서번호 · 내용 · 태그로 검색", "aria-label": "키워드" });
   const tagIn = el("input", { value: params.tag || "", placeholder: "태그", "aria-label": "태그" });
   const fromIn = el("input", { type: "date", value: params.from || "", "aria-label": "시작일" }), toIn = el("input", { type: "date", value: params.to || "", "aria-label": "종료일" });
-  const sortF = el("select", { "aria-label": "정렬" }, [["", q.get("q") ? "관련도순" : "최근 수정순"], ["updated", "최근 수정순"], ["title", "제목순"], ["doc_no", "문서번호순"]].map(([v, l]) => el("option", { value: v, selected: (params.sort || "") === v }, l)));
+  const sortF = el("select", { "aria-label": "정렬", onchange: () => nav({ sort: sortF.value }) }, [["", q.get("q") ? "관련도순" : "최근 수정순"], ["updated", "최근 수정순"], ["title", "제목순"], ["doc_no", "문서번호순"]].map(([v, l]) => el("option", { value: v, selected: (params.sort || "") === v }, l)));
   const savedSel = el("select", { "aria-label": "저장된 검색", onchange: (e) => { const s = saved.find((x) => String(x.id) === e.target.value); if (s) nav({ ...Object.fromEntries(["q", "type", "status", "tag", "folder", "owner", "from", "to", "sort", "mine", "favorites"].map((k) => [k, ""])), ...s.query }); } },
     [el("option", { value: "" }, "저장된 검색..."), ...saved.map((s) => el("option", { value: s.id }, s.name))]);
   const titleText = params.favorites ? "즐겨찾기" : params.mine ? "내가 올린 문서" : params.q ? `검색: ${params.q}` : curF ? curF.name : "문서함";
+  const FILTER_LABEL = { type: "유형", status: "상태", tag: "태그", owner: "소유자", from: "시작", to: "종료" };
+  const active = Object.keys(FILTER_LABEL).filter((k) => params[k]);
+  const filterName = (k, v) => k === "type" ? typeName(v) : k === "status" ? (STATUS[v]?.[0] || v) : k === "owner" ? userName(v) : v;
   const rows = res.items.map((d) => {
     const chk = el("input", { type: "checkbox", "aria-label": d.title, onclick: (e) => e.stopPropagation(), onchange: (e) => { e.target.checked ? selected.add(d.id) : selected.delete(d.id); updateBulk(); } });
-    return { id: d.id, cells: [el("span", { onclick: (e) => e.stopPropagation() }, chk), el("span", { class: "ref" }, d.doc_no),
-      el("div", {}, el("b", {}, d.title), d.snippet ? snippetNode(d.snippet) : "", d.tags.length ? el("div", {}, d.tags.map((t) => pill("#" + t))) : ""),
-      typeName(d.doc_type), statusPill(d.status), d.origin === "crawled" ? "-" : d.effective_ver ? `v${d.effective_ver}` + (d.current_ver > d.effective_ver ? ` (v${d.current_ver} 작성 중)` : "") : `v${d.current_ver}`,
-      d.origin === "crawled" ? "외부 소스" : userName(d.owner || "-"), fmtDay(d.updated),
-      el("span", {}, d.locked_by ? pill("잠김 " + d.locked_by, "warn") : "", d.legal_hold ? pill("법적 보류", "bad") : "", d.expires_at ? pill("만료 " + d.expires_at, d.status === "expired" ? "bad" : "") : "", !d.readable ? pill("읽기 불가", "warn") : "")] };
+    const ver = d.origin === "crawled" ? "" : d.effective_ver ? `v${d.effective_ver}` + (d.current_ver > d.effective_ver ? ` · v${d.current_ver} 작성 중` : "") : `v${d.current_ver}`;
+    return { id: d.id, cells: [el("span", { onclick: (e) => e.stopPropagation() }, chk),
+      el("div", { class: "doc-cell" }, fileTile(d.filename || d.title), el("div", { class: "doc-main" },
+        el("div", { class: "doc-title" }, d.title), el("div", { class: "doc-sub" }, el("span", { class: "ref" }, d.doc_no), " · ", typeName(d.doc_type), ver ? " · " + ver : ""),
+        d.snippet ? snippetNode(d.snippet) : "", d.tags.length ? el("div", { class: "chips doc-tags" }, d.tags.slice(0, 5).map((t) => el("span", { class: "tag" }, "#" + t))) : "")),
+      el("div", { class: "doc-flags" }, statusPill(d.status), d.locked_by ? pill("잠김 " + d.locked_by, "warn") : "", d.legal_hold ? pill("법적 보류", "bad") : "", d.expires_at ? pill("만료 " + d.expires_at, d.status === "expired" ? "bad" : "") : "", !d.readable ? pill("읽기 불가", "warn") : ""),
+      el("div", { class: "who" }, avatar(d.origin === "crawled" ? "외" : userName(d.owner || "-")), el("span", {}, d.origin === "crawled" ? "외부 소스" : userName(d.owner || "-"))),
+      el("span", { class: "when", title: fmtDate(d.updated) }, relTime(d.updated))] };
   });
   const facetChips = (key, label, param) => res.facets[key].length ? el("div", { class: "row" }, el("span", { class: "hint" }, label), el("div", { class: "chips" }, res.facets[key].slice(0, 8).map((f) =>
     el("button", { type: "button", class: "chip" + (params[param] === f.value ? " on" : ""), onclick: () => nav({ [param]: params[param] === f.value ? "" : f.value }) },
       `${key === "type" ? typeName(f.value) : key === "owner" ? (f.value === "system" ? "시스템(외부 소스)" : userName(f.value)) : key === "status" ? (STATUS[f.value]?.[0] || f.value) : f.value} ${f.count}`)))) : "";
   const pages = Math.max(1, Math.ceil(res.total / res.size));
+  const adv = el("div", { class: "adv", hidden: !(params.type || params.status || params.tag || params.from || params.to) },
+    el("div", { class: "filters" }, el("div", {}, el("label", {}, "유형"), typeF), el("div", {}, el("label", {}, "상태"), statusF), el("div", {}, el("label", {}, "태그"), tagIn), el("div", {}, el("label", {}, "수정일 시작"), fromIn), el("div", {}, el("label", {}, "수정일 종료"), toIn)),
+    el("div", { class: "row sec" }, el("button", { class: "primary", type: "submit" }, "적용"), el("button", { type: "button", onclick: () => go("#/docs") }, "초기화"),
+      el("button", { type: "button", onclick: async () => { const n = el("input", { placeholder: "이름" }); if (await dialog("검색 저장", () => field("이름", n), [{ label: "취소", value: false }, { label: "저장", primary: true }])) { await api("/api/dms/saved", { method: "POST", body: { name: n.value, query: Object.fromEntries(q.entries()) } }); toast("저장했습니다"); go(location.hash); } } }, "이 검색 저장"),
+      saved.length ? savedSel : ""));
   view.replaceChildren(
-    el("div", { class: "page-h" }, el("h1", {}, titleText), el("span", { class: "hint" }, `${fmtNum(res.total)}건`), el("span", { class: "grow" }),
-      el("button", { class: "primary", id: "btn-new", onclick: () => registerDialog(cur || 1).catch(fail) }, "+ 새 문서"),
-      el("button", { id: "btn-tpl", onclick: () => go("#/new") }, "양식으로 작성"),
-      el("button", { onclick: () => importDialog(cur || 1).catch(fail) }, "ZIP 일괄 등록"),
-      el("button", { onclick: () => folderDialog(tree, cur).catch(fail) }, curF ? "폴더 관리" : "새 폴더")),
+    el("div", { class: "page-h" }, el("h1", {}, titleText), el("span", { class: "count-pill" }, `${fmtNum(res.total)}건`), el("span", { class: "grow" }),
+      el("button", { id: "btn-tpl", onclick: () => go("#/new") }, icon("file", 16), "양식으로 작성"),
+      menu("더 보기", [{ label: "ZIP 일괄 등록", icon: "upload", run: () => importDialog(cur || 1) }, { label: curF ? "폴더 관리" : "새 폴더", icon: "folder", run: () => folderDialog(tree, cur) }]),
+      el("button", { class: "primary", id: "btn-new", onclick: () => registerDialog(cur || 1).catch(fail) }, icon("plus", 16), "새 문서")),
     el("div", { class: "browser" }, renderTree(tree, cur, (id) => nav({ folder: id || "", favorites: "", mine: "" })),
       el("div", { class: "stack" },
-        el("form", { class: "card filters", onsubmit: (e) => { e.preventDefault(); nav({ q: qIn.value.trim(), type: typeF.value, status: statusF.value, tag: tagIn.value.trim(), from: fromIn.value, to: toIn.value, sort: sortF.value }); } },
-          el("div", {}, el("label", {}, "키워드"), qIn), el("div", {}, el("label", {}, "유형"), typeF), el("div", {}, el("label", {}, "상태"), statusF), el("div", {}, el("label", {}, "태그"), tagIn),
-          el("div", {}, el("label", {}, "수정일 from"), fromIn), el("div", {}, el("label", {}, "to"), toIn), el("div", {}, el("label", {}, "정렬"), sortF),
-          el("div", { class: "actions" }, el("button", { class: "primary" }, "검색"), el("button", { type: "button", onclick: () => go("#/docs") }, "초기화"),
-            el("button", { type: "button", onclick: async () => { const n = el("input", { placeholder: "이름" }); if (await dialog("검색 저장", () => field("이름", n), [{ label: "취소", value: false }, { label: "저장", primary: true }])) { await api("/api/dms/saved", { method: "POST", body: { name: n.value, query: Object.fromEntries([...q].filter(([k]) => k !== "page")) } }); toast("저장했습니다"); go(location.hash); } } }, "검색 저장"),
-            saved.length ? savedSel : "")),
-        el("div", { class: "stack" }, facetChips("type", "유형", "type"), facetChips("status", "상태", "status"), facetChips("tag", "태그", "tag"), facetChips("owner", "소유자", "owner")),
+        el("form", { class: "card toolbar", onsubmit: (e) => { e.preventDefault(); nav({ q: qIn.value.trim(), type: typeF.value, status: statusF.value, tag: tagIn.value.trim(), from: fromIn.value, to: toIn.value }); } },
+          el("div", { class: "tb-row" }, el("div", { class: "tb-search" }, icon("search", 16), qIn),
+            el("button", { type: "button", class: "ghost", "aria-expanded": String(!adv.hidden), onclick: (e) => { adv.hidden = !adv.hidden; e.currentTarget.setAttribute("aria-expanded", String(!adv.hidden)); } }, icon("settings", 16), "필터", active.length ? el("span", { class: "nb" }, String(active.length)) : ""),
+            sortF, el("button", { class: "primary", type: "submit" }, "검색")),
+          adv,
+          active.length ? el("div", { class: "chips sec" }, active.map((k) => el("button", { type: "button", class: "chip on", onclick: () => nav({ [k]: "" }) }, `${FILTER_LABEL[k]}: ${filterName(k, params[k])}`, icon("x", 12)))) : ""),
+        el("div", { class: "facets" }, facetChips("type", "유형", "type"), facetChips("status", "상태", "status"), facetChips("tag", "태그", "tag"), facetChips("owner", "소유자", "owner")),
         bulk,
-        rows.length ? table(["", "문서번호", "제목", "유형", "상태", "버전", "소유자", "수정일", ""], rows, { onRow: (r) => go("#/doc/" + r.id), cls: "docs-tbl" }) : empty(params.q ? "검색 결과가 없습니다. 읽을 권한이 있는 문서만 검색됩니다." : "문서가 없습니다. '+ 새 문서'로 등록하세요."),
+        rows.length ? el("div", { class: "card flush-card" }, table(["", "문서", "상태", "소유자", "수정"], rows, { onRow: (r) => go("#/doc/" + r.id), cls: "docs-tbl" }))
+          : el("div", { class: "card" }, empty(params.q ? "검색 결과가 없습니다. 읽을 권한이 있는 문서만 검색됩니다." : "문서가 없습니다. '새 문서'로 등록하거나 양식으로 작성해 보세요.", "search")),
         el("div", { class: "row end" }, el("button", { disabled: res.page <= 1, onclick: () => nav({ page: res.page - 1 }) }, "이전"), el("span", { class: "hint" }, `${res.page} / ${pages}`), el("button", { disabled: res.page >= pages, onclick: () => nav({ page: res.page + 1 }) }, "다음")))));
   updateBulk();
 });

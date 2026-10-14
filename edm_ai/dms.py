@@ -170,7 +170,8 @@ class DmsCore:
         for r in self.q("SELECT w.doc_id AS d, s.approver AS a FROM wf_steps s JOIN workflows w ON w.id=s.wf_id WHERE w.status='pending' AND s.status='pending'"):
             appr.setdefault(r["d"], set()).add(r["a"])
         rows = {r["id"]: self._parse_row(r) for r in self.q("SELECT * FROM dms_docs")}
-        self._snap = {"folders": folders, "appr": appr, "rows": rows, "types": {t["code"]: t["name"] for t in self.q("SELECT code,name FROM doc_types")},
+        fnames = {r["doc_id"]: r["filename"] for r in self.q("SELECT v.doc_id, v.filename FROM dms_versions v JOIN dms_docs d ON d.id=v.doc_id AND v.ver=d.current_ver")}
+        self._snap = {"folders": folders, "appr": appr, "rows": rows, "fnames": fnames, "types": {t["code"]: t["name"] for t in self.q("SELECT code,name FROM doc_types")},
                       "paths": {}}
         try:
             yield
@@ -489,9 +490,11 @@ class DmsCore:
              "owner": row["owner"], "created": row["created"], "updated": row["updated"], "current_ver": row["current_ver"],
              "effective_ver": row["effective_ver"], "tags": row["tags"], "level": row["level"], "readable": readable,
              "retention_until": row["retention_until"], "legal_hold": bool(row["legal_hold"]), "expires_at": row["expires_at"],
-             "locked_by": row["locked_by"], "source": row["source"], "description": row["description"] if readable else ""}
+             "locked_by": row["locked_by"], "source": row["source"], "description": row["description"] if readable else "",
+             "filename": (self._snap["fnames"].get(row["id"]) if self._snap is not None else (self.q1("SELECT filename FROM dms_versions WHERE doc_id=? AND ver=?", (row["id"], row["current_ver"])) or {}).get("filename"))
+                         if row["origin"] == "managed" else row["source"].rsplit("/", 1)[-1]}
         if not readable:
-            d["tags"] = []
+            d["tags"], d["filename"] = [], None
         if with_perms:
             d["perms"] = sorted(self.perms(p, row))
         return d

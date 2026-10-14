@@ -4,6 +4,8 @@ import "./v-doc.js";
 import "./v-cal.js";
 import "./v-edit.js";
 import "./v-social.js";
+import { openPalette } from "./v-palette.js";
+import { toggleNotifPopover } from "./v-notif.js";
 import { refreshBell } from "./v-misc.js";
 import { icon } from "./icons.js";
 
@@ -63,6 +65,10 @@ function chrome() {
     try { localStorage.setItem("theme", next); } catch { /* ignore */ }
     applyTheme(next);
   });
+  $("#top-q").addEventListener("focus", () => {});
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && state.me) { e.preventDefault(); openPalette(); }
+  });
   document.addEventListener("keydown", (e) => {                           // "/" focuses the search box (like most document tools)
     if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.querySelector("dialog[open]")) { e.preventDefault(); $("#top-q").focus(); }
   });
@@ -72,7 +78,7 @@ async function boot() {
   state.cfg = await (await fetch("/api/config")).json();
   chrome();
   $("#top-search").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#top-q").value.trim(); if (q) go("#/docs?q=" + encodeURIComponent(q)); });
-  $("#bell").addEventListener("click", () => go("#/notifications"));
+  $("#bell").addEventListener("click", (e) => { e.stopPropagation(); toggleNotifPopover(); });
   $("#logout").addEventListener("click", () => {
     try { sessionStorage.clear(); } catch { /* ignore */ }
     if (state.cfg.auth_mode === "proxy" && state.cfg.logout_url) { location.href = state.cfg.logout_url; return; }
