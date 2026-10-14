@@ -7,31 +7,61 @@ import sys
 from .config import App
 
 
+def _probe(host: str, port: int, timeout: float = 0.7):
+    """What is already answering on host:port? -> ('free'|'edm-ai'|'other', version or None)"""
+    import json as _json
+    import socket
+    import urllib.request
+    with socket.socket() as s:
+        s.settimeout(timeout)
+        if s.connect_ex((host, port)) != 0:
+            return "free", None
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/config", timeout=timeout) as r:
+            cfg = _json.loads(r.read())
+            return "edm-ai", cfg.get("version", "0.3 이하(버전 표시 없음)")
+    except Exception:  # noqa: BLE001
+        return "other", None
+
+
 def run_demo(args):
     import runpy
     import threading
     import webbrowser
     from pathlib import Path
 
+    from . import __version__
+
     demo = Path(__file__).resolve().parent.parent / "examples" / "demo"
     if not (demo / "build_demo.py").exists():
         sys.exit("demo data not found: run this from a checkout of the repository")
+    # An older EDM-AI left running on the classic port is the usual reason people keep seeing an old screen.
+    kind, ver = _probe(args.host, 8080)
+    stale = f"\n  ! 포트 8080 에서 이전 EDM-AI (버전 {ver}) 가 아직 실행 중입니다. 8080 으로 접속하면 옛 화면이 보입니다. 아래 새 주소만 쓰세요.\n" if kind == "edm-ai" and ver != __version__ else ""
+    port = args.port
+    for cand in range(args.port, args.port + 20):
+        if _probe(args.host, cand)[0] == "free":
+            port = cand
+            break
+    else:
+        sys.exit(f"{args.port}~{args.port + 19} 포트가 모두 사용 중입니다. --port 로 다른 번호를 지정하세요.")
     if args.reset:
         import shutil
         shutil.rmtree(demo / "workspace", ignore_errors=True)
         shutil.rmtree(demo / "docs" / "uploads", ignore_errors=True)
     runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
-    url = f"http://{args.host}:{args.port}/"
-    from . import __version__
-    print(f"\n  EDM-AI v{__version__} demo  ->  {url}\n  Pick a user at the top, then ask e.g. '한빛전자 MES 계약 금액과 납기 지연 이슈는?'\n"
-          "  Try 김영업(영업) vs 박재무(재무) vs 최협력(외부). Ctrl+C to stop.\n")
+    url = f"http://{args.host}:{port}/"
+    bar = "=" * 66
+    print(f"\n{bar}\n  EDM-AI v{__version__}  문서중앙화 + AI  (폴더·버전·결재·보존·공유·감사)\n"
+          f"  이 주소를 여세요  ->  {url}\n{stale}"
+          f"  상단에서 김영업(영업) / 박재무(재무) / 최협력(외부) 를 바꿔 보세요.  종료: Ctrl+C\n{bar}\n")
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     from .server import serve
     try:
-        serve(App(str(demo / "config.json")), args.host, args.port, demo_login=True)
+        serve(App(str(demo / "config.json")), args.host, port, demo_login=True)
     except OSError as e:
-        sys.exit(f"cannot listen on {args.host}:{args.port} ({e}); try --port 8081")
+        sys.exit(f"cannot listen on {args.host}:{port} ({e}); try --port {port + 1}")
     except KeyboardInterrupt:
         pass
 
@@ -44,7 +74,7 @@ def main(argv=None):
     ap.add_argument("-c", "--config", help="config.json (not needed for `demo`)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("demo", help="build the sample data and start the web UI (needs a repo checkout)")
-    d.add_argument("--port", type=int, default=8080)
+    d.add_argument("--port", type=int, default=8787, help="first port to try (the next free one is used if it is busy)")
     d.add_argument("--host", default="127.0.0.1")
     d.add_argument("--no-browser", action="store_true")
     d.add_argument("--reset", action="store_true", help="delete the demo workspace first (fresh data, no leftovers from an older version)")

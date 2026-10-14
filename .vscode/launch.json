@@ -8,9 +8,7 @@
       "module": "edm_ai",
       "args": [
         "demo",
-        "--reset",
-        "--port",
-        "8080"
+        "--reset"
       ],
       "console": "integratedTerminal",
       "justMyCode": true
@@ -21,9 +19,7 @@
       "request": "launch",
       "module": "edm_ai",
       "args": [
-        "demo",
-        "--port",
-        "8080"
+        "demo"
       ],
       "console": "integratedTerminal",
       "justMyCode": true
