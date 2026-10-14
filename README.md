@@ -67,6 +67,11 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 
 구조와 보안 모델 상세: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## v0.4 — 문서중앙화(EDM) 전체 기능
+폴더 트리·문서번호 채번·버전/체크아웃/비교·**결재(순차/병렬/위임)**·보존·법적 보류·휴지통·만료·댓글/멘션·알림(+메일)·즐겨찾기·**외부 공유 링크**·ZIP 일괄 등록/내보내기·대시보드·감사/관리 화면·백업/복구까지 구현했습니다. **승인된 문서만 AI 답변에 쓰이고, 읽을 권한이 없는 문서는 모든 화면·API·AI에서 존재 자체가 드러나지 않습니다.**
+- 전체 기능표와 한계: [docs/FEATURES.md](docs/FEATURES.md) · 운영: [docs/OPERATIONS.md](docs/OPERATIONS.md) · API: [docs/API.md](docs/API.md)
+- 브라우저 e2e: `tests/e2e/ui.e2e.js` (58개) — 신규 작업공간에서 `python3 -m edm_ai demo --no-browser` 로 띄운 뒤 실행
+
 ## v0.3 추가 기능 (EDM · 자동화 · 연동)
 - **EDM 화면**: 문서 목록·검색, 업로드(권한 지정), 상세(자동 요약/추출 항목/DB 대조/연결 DB 행/이력), 소유자·관리자 권한 편집, 삭제. 읽을 수 없는 문서는 404.
 - **업무 자동화**: 문서에서 계약번호·계약금액("4억 8천만원")·납기를 추출해 업무 DB와 **호출자 권한으로** 대조 → 알림 탭/배지. 가려진 컬럼은 대조하지 않음.

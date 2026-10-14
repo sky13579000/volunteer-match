@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import difflib
 import hashlib
 import json
@@ -52,6 +53,7 @@ class DmsCore:
         self.share_cfg = {"enabled": False, "max_days": 30, "max_level": 1, **c.get("external_share", {})}
         self._defer = 0
         self._dirty = False
+        self._snap = None
         self.bootstrap(c)
 
     # ---------------- tiny SQL helpers ----------------
@@ -149,7 +151,42 @@ class DmsCore:
             out.append({"type": t, "id": "*" if t == "all" else i, **({} if t == "deny" else {"role": r})})
         return out
 
+    @contextlib.contextmanager
+    def snapshot(self):
+        """Read-only fast path for list-style requests: folders, approvers, doc types and every document row are loaded
+        ONCE instead of per document (search / tree / dashboard went from O(N) queries per document to O(1)).
+        Never use around writes."""
+        if self._snap is not None:
+            yield
+            return
+        folders = {}
+        for r in self.q("SELECT * FROM folders"):
+            r["entries"] = json.loads(r["entries"])
+            folders[r["id"]] = r
+        appr: dict = {}
+        for r in self.q("SELECT w.doc_id AS d, s.approver AS a FROM wf_steps s JOIN workflows w ON w.id=s.wf_id WHERE w.status='pending' AND s.status='pending'"):
+            appr.setdefault(r["d"], set()).add(r["a"])
+        rows = {r["id"]: self._parse_row(r) for r in self.q("SELECT * FROM dms_docs")}
+        self._snap = {"folders": folders, "appr": appr, "rows": rows, "types": {t["code"]: t["name"] for t in self.q("SELECT code,name FROM doc_types")},
+                      "paths": {}}
+        try:
+            yield
+        finally:
+            self._snap = None
+
+    def all_rows(self, include_deleted=False) -> list[dict]:
+        with self.snapshot():
+            return [r for r in self._snap["rows"].values() if include_deleted or not r["deleted_at"]]
+
+    @staticmethod
+    def _parse_row(r: dict) -> dict:
+        for k in ("tags", "props", "entries"):
+            r[k] = json.loads(r[k] or ("{}" if k == "props" else "[]"))
+        return r
+
     def folder(self, fid) -> dict | None:
+        if self._snap is not None:
+            return self._snap["folders"].get(fid)
         r = self.q1("SELECT * FROM folders WHERE id=?", (fid,))
         if r:
             r["entries"] = json.loads(r["entries"])
@@ -166,7 +203,12 @@ class DmsCore:
         return out
 
     def folder_path(self, fid) -> str:
-        return " / ".join(f["name"] for f in reversed(self.folder_chain(fid)))
+        if self._snap is not None and fid in self._snap["paths"]:
+            return self._snap["paths"][fid]
+        path = " / ".join(f["name"] for f in reversed(self.folder_chain(fid)))
+        if self._snap is not None:
+            self._snap["paths"][fid] = path
+        return path
 
     def _folder_entries(self, fid) -> list[dict]:
         entries = []
@@ -177,11 +219,10 @@ class DmsCore:
         return entries
 
     def row(self, doc_id) -> dict | None:
+        if self._snap is not None:
+            return self._snap["rows"].get(doc_id)
         r = self.q1("SELECT * FROM dms_docs WHERE id=?", (doc_id,))
-        if r:
-            for k in ("tags", "props", "entries"):
-                r[k] = json.loads(r[k] or ("{}" if k == "props" else "[]"))
-        return r
+        return self._parse_row(r) if r else None
 
     def _eff_entries(self, row) -> list[dict]:
         entries = list(row["entries"])
@@ -205,6 +246,8 @@ class DmsCore:
         return best
 
     def approvers_of(self, doc_id) -> set[str]:
+        if self._snap is not None:
+            return self._snap["appr"].get(doc_id, set())
         return {r["approver"] for r in self.q(
             "SELECT s.approver FROM wf_steps s JOIN workflows w ON w.id=s.wf_id WHERE w.doc_id=? AND w.status='pending' AND s.status='pending'", (doc_id,))}
 
@@ -433,7 +476,7 @@ class DmsCore:
 
     # ---------------- summaries ----------------
     def summary(self, p, row, with_perms=True) -> dict:
-        t = self.q1("SELECT name FROM doc_types WHERE code=?", (row["doc_type"],)) or {}
+        t = {"name": self._snap["types"].get(row["doc_type"], row["doc_type"])} if self._snap is not None else (self.q1("SELECT name FROM doc_types WHERE code=?", (row["doc_type"],)) or {})
         readable = self.can_read(p, row)
         d = {"id": row["id"], "doc_no": row["doc_no"], "title": row["title"], "folder_id": row["folder_id"],
              "folder_path": self.folder_path(row["folder_id"]) if row["folder_id"] else "", "doc_type": row["doc_type"],

@@ -20,7 +20,7 @@ class Index:
     involve chunks the caller may read, so forbidden documents cannot influence ranking or leak via scores."""
 
     def __init__(self, docs: dict[int, Document], chunks: list[Chunk], dense: list[list[float]] | None = None,
-                 fuzzy_min: float = 0.35, dense_min: float = 0.55, min_coverage: float = 0.2):
+                 fuzzy_min: float = 0.35, dense_min: float = 0.55, min_coverage: float = 0.2, cache: dict | None = None):
         self.docs, self.chunks, self.dense = docs, chunks, dense
         self.by_source = {d.source: d for d in docs.values()}
         self.fuzzy_min, self.dense_min, self.min_coverage = fuzzy_min, dense_min, min_coverage
@@ -28,15 +28,27 @@ class Index:
         self.postings: dict[str, dict[int, int]] = defaultdict(dict)
         self.lengths: list[int] = []
         self.by_entity: dict[str, set[int]] = defaultdict(set)
-        self.fuzzy = [fuzzy_vec(c.text) for c in chunks]
+        self.fuzzy = []
+        fresh = {}
         for i, c in enumerate(chunks):
-            toks = tokenize(c.text)
-            self.token_sets.append(frozenset(toks))
+            # per-chunk analysis is reused across reloads: key includes the text hash because SQLite may recycle row ids
+            key = (c.id, len(c.text), hash(c.text))
+            hit = cache.get(key) if cache is not None else None
+            if hit is None:
+                toks = tokenize(c.text)
+                hit = (toks, frozenset(toks), fuzzy_vec(c.text))
+            fresh[key] = hit
+            toks = hit[0]
+            self.token_sets.append(hit[1])
+            self.fuzzy.append(hit[2])
             self.lengths.append(len(toks) or 1)
             for t in toks:
                 self.postings[t][i] = self.postings[t].get(i, 0) + 1
             for e in c.entities:
                 self.by_entity[e].add(i)
+        if cache is not None:
+            cache.clear()
+            cache.update(fresh)          # drops analyses of chunks that no longer exist
 
     def allowed(self, p: Principal) -> set[int]:
         ok = {d for d, doc in self.docs.items() if doc.acl.allows(p)}

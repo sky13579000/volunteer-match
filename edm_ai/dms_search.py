@@ -75,7 +75,12 @@ class SearchMixin:
     def search(self, p, q=None, *, type=None, status=None, tag=None, folder=None, owner=None, origin=None, date_from=None,
                date_to=None, mine=False, favorites=False, sort=None, page=1, size=30) -> dict:
         q = (q or "").strip()[:300] or None
-        rows = [self.row(r["id"]) for r in self.q("SELECT id FROM dms_docs WHERE deleted_at IS NULL")]
+        with self.snapshot():
+            return self._search(p, q, type, status, tag, folder, owner, origin, date_from, date_to, mine, favorites, sort, page, size)
+
+    def _search(self, p, q, type, status, tag, folder, owner, origin, date_from, date_to, mine, favorites, sort, page, size) -> dict:
+        q = (q or "").strip()[:300] or None
+        rows = self.all_rows()
         fav = {r["doc_id"] for r in self.q("SELECT doc_id FROM favorites WHERE user_id=?", (p.id,))} if favorites else set()
         dfrom, dto = self.clean_date(date_from, "시작일"), self.clean_date(date_to, "종료일")
         sub = self._descendants(int(folder)) if folder else None
@@ -125,7 +130,11 @@ class SearchMixin:
 
     # ---------- dashboard ----------
     def dashboard(self, p) -> dict:
-        rows = [self.row(r["id"]) for r in self.q("SELECT id FROM dms_docs WHERE deleted_at IS NULL")]
+        with self.snapshot():
+            return self._dashboard(p)
+
+    def _dashboard(self, p) -> dict:
+        rows = self.all_rows()
         readable = [r for r in rows if self.can_read(p, r)]
         types = {t["code"]: t["name"] for t in self.q("SELECT code,name FROM doc_types")}
         types["EXT"] = "외부 문서"
@@ -152,8 +161,7 @@ class SearchMixin:
     def alerts(self, p) -> list[dict]:
         out = []
         auto = (self.app.cfg.get("automation") or {}).get("contract_check")
-        for r in self.q("SELECT id FROM dms_docs WHERE deleted_at IS NULL ORDER BY source"):
-            row = self.row(r["id"])
+        for row in sorted(self.all_rows(), key=lambda r: r["source"]):
             if not self.can_read(p, row):
                 continue
             pr = self.perms(p, row)

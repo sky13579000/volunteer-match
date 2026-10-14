@@ -24,6 +24,7 @@ class Engine:
                  llm=None, expand_top: int = 2, embedder=None, pii_reveal_roles=(), min_coverage: float = 0.2):
         self.store, self.gateway, self.extractor, self.llm = store, gateway, extractor, llm
         self.expand_top, self.embedder, self.min_coverage = expand_top, embedder, min_coverage
+        self._analysis_cache: dict = {}
         self.pii_reveal_roles = frozenset(pii_reveal_roles)
         self.reload()
 
@@ -41,7 +42,7 @@ class Engine:
                 dense = [cache[c.id] for c in chunks]
             except Exception:
                 dense = None  # embedder down: fall back to fuzzy vectors rather than failing
-        self.index = Index(docs, chunks, dense, min_coverage=self.min_coverage)
+        self.index = Index(docs, chunks, dense, min_coverage=self.min_coverage, cache=self._analysis_cache)
 
     def ask(self, p: Principal, question: str, k: int = 5) -> Answer:
         q_ents = self.extractor.extract(question)

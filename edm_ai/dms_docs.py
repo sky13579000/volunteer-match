@@ -27,12 +27,15 @@ class DocsMixin:
         return best
 
     def folder_tree(self, p) -> list[dict]:
+        with self.snapshot():
+            return self._folder_tree(p)
+
+    def _folder_tree(self, p) -> list[dict]:
         counts: dict[int, int] = {}
-        for r in self.q("SELECT id FROM dms_docs WHERE deleted_at IS NULL"):
-            row = self.row(r["id"])
+        for row in self.all_rows():
             if self.can_read(p, row):
                 counts[row["folder_id"]] = counts.get(row["folder_id"], 0) + 1
-        folders = {f["id"]: f for f in (self.folder(r["id"]) for r in self.q("SELECT id FROM folders"))}
+        folders = dict(self._snap["folders"])
         show = {fid for fid in folders if counts.get(fid) or folders[fid]["open_create"] or self.folder_role(p, fid) >= 1 and not self.admin(p)}
         if self.admin(p):
             show = set(folders)

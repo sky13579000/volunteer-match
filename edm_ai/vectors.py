@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
@@ -16,7 +15,7 @@ def fuzzy_vec(text: str) -> dict[int, float]:
     s = _STRIP.sub("", text.lower())
     v: dict[int, float] = {}
     for i in range(len(s) - 2):
-        h = int.from_bytes(hashlib.blake2b(s[i:i + 3].encode(), digest_size=4).digest(), "big") % DIM
+        h = hash(s[i:i + 3]) % DIM       # vectors are only ever compared inside one process, so Python's fast salted hash is fine
         v[h] = v.get(h, 0.0) + 1.0
     n = math.sqrt(sum((1 + math.log(x)) ** 2 for x in v.values())) or 1.0
     return {k: (1 + math.log(x)) / n for k, x in v.items()}

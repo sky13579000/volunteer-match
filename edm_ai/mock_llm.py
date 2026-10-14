@@ -9,21 +9,26 @@ block it receives, citing [E#]; embeddings are deterministic hashed trigram vect
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .vectors import DIM, fuzzy_vec
 
 DENSE = 256
 _EV = re.compile(r"\[(E\d+)\] \((.*?)\) (.*?)(?=\n\n\[E\d+\] \(|\Z)", re.S)
 
 
+_STRIP = re.compile(r"[^0-9a-z가-힣]+")
+
+
 def embed(text: str) -> list[float]:
+    """Deterministic across processes and restarts (a real embedding server must be: vectors are cached in the DB)."""
+    s = _STRIP.sub("", text.lower())
     v = [0.0] * DENSE
-    for k, x in fuzzy_vec(text).items():
-        v[k % DENSE] += x
+    for i in range(len(s) - 2):
+        v[int.from_bytes(hashlib.blake2b(s[i:i + 3].encode(), digest_size=4).digest(), "big") % DENSE] += 1.0
     n = math.sqrt(sum(x * x for x in v)) or 1.0
     return [x / n for x in v]
 
