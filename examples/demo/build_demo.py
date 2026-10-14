@@ -28,4 +28,9 @@ db.close()
 sys.path.insert(0, str(here.parent.parent))
 from edm_ai.config import App  # noqa: E402
 
-print(App(str(here / "config.json")).ingest())
+app = App(str(here / "config.json"))
+print(app.ingest())
+sys.path.insert(0, str(here))
+from seed import seed  # noqa: E402
+
+print("demo documents seeded:", seed(app))

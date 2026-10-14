@@ -88,7 +88,8 @@ class BulkMixin:
 
     # ---------- bulk import ----------
     def import_zip(self, p, folder_id, data: bytes, doc_type="GEN", level=0, tags=None) -> dict:
-        if self.folder_role(p, folder_id) < 2 or not self.folder(folder_id) or self.folder(folder_id)["origin"] == "crawled":
+        f = self.folder(folder_id)
+        if not f or f["origin"] == "crawled" or (self.folder_role(p, folder_id) < 2 and not f["open_create"]):
             raise DmsError(403, "이 폴더에 등록할 권한이 없습니다")
         try:
             zf = zipfile.ZipFile(__import__("io").BytesIO(data))

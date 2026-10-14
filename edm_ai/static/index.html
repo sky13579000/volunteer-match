@@ -3,73 +3,43 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EDM-AI 지식 플랫폼</title>
+<title>EDM-AI 문서중앙화</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<header>
-  <h1>EDM-AI</h1>
-  <span id="who"></span>
-  <nav>
-    <button id="tab-chat" class="tab on">질의응답</button>
-    <button id="tab-docs" class="tab" hidden>문서</button>
-    <button id="tab-alerts" class="tab" hidden>알림 <span id="alert-count" class="count" hidden></span></button>
-    <button id="tab-audit" class="tab" hidden>감사 로그</button>
-    <button id="logout" hidden>로그아웃</button>
-  </nav>
-</header>
-
-<main id="login" hidden>
-  <h2>로그인</h2>
-  <div id="login-demo" hidden>
-    <label>데모 사용자 <select id="demo-user"></select></label>
-    <p class="hint">데모 전용 화면입니다. 운영에서는 토큰/SSO 모드를 사용하세요.</p>
+<div id="login" class="login" hidden>
+  <div class="card login-card">
+    <h1>EDM-AI</h1>
+    <p class="hint">문서중앙화 · AI 지식 플랫폼</p>
+    <div id="login-demo" hidden>
+      <label>데모 사용자 <select id="demo-user"></select></label>
+      <p class="hint">데모 전용 화면입니다. 운영에서는 토큰/SSO 모드를 사용하세요.</p>
+    </div>
+    <div id="login-token" hidden>
+      <label>액세스 토큰 <input id="token" type="password" autocomplete="off" placeholder="edm-ai token -u 사용자 로 발급"></label>
+    </div>
+    <button id="login-go" class="primary">시작</button>
+    <p id="login-err" class="err" role="alert"></p>
   </div>
-  <div id="login-token" hidden>
-    <label>액세스 토큰 <input id="token" type="password" autocomplete="off" placeholder="edm-ai token -u 사용자 로 발급"></label>
+</div>
+
+<div id="shell" class="shell" hidden>
+  <aside class="side" aria-label="주 메뉴">
+    <div class="brand">EDM-AI</div>
+    <nav id="nav"></nav>
+    <div class="side-foot"><span id="who"></span><button id="logout" class="link">로그아웃</button></div>
+  </aside>
+  <div class="main-col">
+    <header class="top">
+      <form id="top-search" role="search" class="top-search">
+        <input id="top-q" type="search" placeholder="문서 검색 (제목 · 문서번호 · 내용 · 태그)" aria-label="문서 검색">
+      </form>
+      <button id="bell" class="bell" aria-label="알림">알림<span id="bell-n" class="count" hidden></span></button>
+    </header>
+    <main id="view" tabindex="-1"></main>
   </div>
-  <button id="login-go" class="primary">시작</button>
-  <p id="login-err" class="err"></p>
-</main>
-
-<main id="chat" hidden>
-  <div id="log" aria-live="polite"></div>
-  <div id="examples"></div>
-  <form id="form">
-    <textarea id="q" rows="2" placeholder="질문을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)" required></textarea>
-    <button class="primary" id="send">질문</button>
-  </form>
-</main>
-
-<main id="docs" class="wide" hidden>
-  <div class="docs-grid">
-    <section class="docs-side">
-      <form id="doc-search" class="row"><input id="doc-q" type="search" placeholder="문서 검색 (제목·내용)" aria-label="문서 검색"><button class="primary">검색</button></form>
-      <details id="upload-box" class="card">
-        <summary>＋ 문서 올리기</summary>
-        <form id="upload-form" class="stack">
-          <input id="up-file" type="file" required aria-label="파일 선택" accept=".md,.txt,.csv,.eml,.html,.htm,.docx,.xlsx,.pptx,.odt,.ods,.odp,.pdf">
-          <label class="check"><input id="up-default" type="checkbox" checked> 내 부서·보안등급 기본 권한 사용</label>
-          <div id="up-acl" hidden></div>
-          <button class="primary" id="up-go">올리기</button>
-          <p id="up-msg" class="hint" role="status"></p>
-        </form>
-      </details>
-      <ul id="doc-list" class="list"></ul>
-    </section>
-    <section id="doc-detail" class="card" aria-live="polite"><p class="hint">왼쪽에서 문서를 고르세요.</p></section>
-  </div>
-</main>
-
-<main id="alerts" class="wide" hidden>
-  <p class="hint">문서에서 자동 추출한 계약금액·납기를 업무 DB와 대조한 결과입니다. 본인이 읽을 수 있는 문서와 컬럼만 대조합니다.</p>
-  <div id="alert-list" class="stack"></div>
-</main>
-
-<main id="audit" hidden>
-  <p id="chain"></p>
-  <table><thead><tr><th>시각</th><th>사용자</th><th>질문</th><th>근거</th><th>결과</th></tr></thead><tbody id="audit-rows"></tbody></table>
-</main>
-<script src="/app.js"></script>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<script type="module" src="/main.js"></script>
 </body>
 </html>

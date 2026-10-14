@@ -107,6 +107,20 @@ class Registration(Base):
         self.assertEqual((name, mime, data[:4]), ("photo.png", "image/png", b"\x89PNG"))
 
 
+class BatchConsistency(Base):
+    def test_documents_created_inside_a_batch_are_immediately_usable_by_their_owner(self):
+        """Regression: permission checks used the stale in-memory index while the reload was deferred."""
+        with self.d.batch():
+            r = self.d.register(self.U["kim"], "b.md", "# 배치\n\n배치 안에서 만든 문서 batchprobe.".encode())
+            self.assertTrue(r["readable"])
+            self.assertIn("edit", r["perms"])
+            v = self.d.new_version(self.U["kim"], r["id"], "b.md", "# 배치\n\n두번째 batchprobe.".encode())
+            self.assertEqual(v["current_ver"], 2)
+            self.assertEqual(self.d.move(self.U["kim"], r["id"], self.f_sales)["folder_path"], "영업팀")
+            self.assertNotIn(r["id"], self.ids("jung"))                                   # and still invisible to outsiders mid-batch
+        self.assertIn(r["id"], self.ids("kim", "batchprobe"))                             # index caught up when the batch ended
+
+
 class Approval(Base):
     def ct(self, **kw):
         return self.reg(doc_type="CT", text="# 계약\n\nCT-2024-001 계약금액은 4억 8천만원이다.", **kw)
@@ -591,6 +605,12 @@ class BulkAndZip(Base):
         paths = {self.d.get(self.U["kim"], c["id"])["folder_path"] for c in res["created"]}
         self.assertEqual(paths, {"영업팀 / 계약 / 2026", "영업팀 / 계약"})
         self.assertFalse((self.d.repo.parent / "escape.md").exists())
+
+    def test_zip_import_into_the_open_registration_folder(self):
+        """Regression: single-file registration allowed the open folder but ZIP import demanded an explicit role."""
+        res = self.d.import_zip(self.U["choi"], 1, self._zip({"x/a.md": "# 열린 폴더\n\nzipopenprobe"}))
+        self.assertEqual(len(res["created"]), 1)
+        self.err(403, self.d.import_zip, self.U["choi"], self.f_sales, self._zip({"a.md": "x"}))
 
     def test_zip_import_limits_and_permissions(self):
         self.err(403, self.d.import_zip, self.U["jung"], self.f_sales, self._zip({"a.md": "x"}))

@@ -1,0 +1,143 @@
+// Shared UI toolkit. Every piece of server data goes through textContent / DOM nodes, never innerHTML.
+export const state = { cfg: {}, me: null, meta: null };
+
+export const $ = (sel, root = document) => root.querySelector(sel);
+
+export function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === false || v === null || v === undefined) continue;
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (k === "value" || k === "checked" || k === "disabled" || k === "selected") n[k] = v;
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.append(c);
+  return n;
+}
+export const text = (s) => document.createTextNode(String(s ?? ""));
+
+// ---------- formatting ----------
+export const fmtDate = (iso) => (iso ? iso.replace("T", " ").slice(0, 16) : "");
+export const fmtDay = (iso) => (iso ? iso.slice(0, 10) : "");
+export const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+export const fmtNum = (n) => Number(n).toLocaleString("ko-KR");
+export const STATUS = { draft: ["작성 중", "warn"], in_review: ["결재 중", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], expired: ["만료", ""], superseded: ["이전 버전", ""] };
+export const pill = (label, cls = "") => el("span", { class: "pill " + cls }, label);
+export const statusPill = (s) => { const [l, c] = STATUS[s] || [s, ""]; return pill(l, c); };
+export const typeName = (code) => (state.meta?.doc_types.find((t) => t.code === code)?.name) || (code === "EXT" ? "외부 문서" : code);
+export const userName = (id) => state.meta?.users.find((u) => u.id === id)?.name || id;
+
+// ---------- api ----------
+export function authHeaders() {
+  const h = {};
+  try {
+    if (state.cfg.auth_mode === "token") h.Authorization = "Bearer " + (sessionStorage.getItem("token") || "");
+    else h["X-User-Id"] = sessionStorage.getItem("uid") || "";
+  } catch { /* storage blocked */ }
+  return h;
+}
+export async function api(path, { method = "GET", body, raw = false } = {}) {
+  const r = await fetch(path, { method, headers: authHeaders(), body: body === undefined ? undefined : JSON.stringify(body) });
+  if (raw && r.ok) return r;
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), { status: r.status });
+  return data;
+}
+export async function saveBlob(path, opts, fallbackName = "download") {
+  const r = await api(path, { ...opts, raw: true });
+  const m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get("Content-Disposition") || "");
+  const url = URL.createObjectURL(await r.blob());
+  const a = el("a", { href: url, download: m ? decodeURIComponent(m[1]) : fallbackName });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+export async function fileToB64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// ---------- feedback ----------
+export function toast(msg, kind = "") {
+  const t = el("div", { class: "toast " + kind, role: "status" }, msg);
+  $("#toasts").append(t);
+  setTimeout(() => t.remove(), kind === "bad" ? 6000 : 3500);
+}
+export const fail = (e) => toast(e.message || String(e), "bad");
+
+/** Modal dialog. `build(close)` returns the body node; actions: [{label, primary, danger, run}] (run returns false to stay open). */
+export function dialog(title, build, actions = [{ label: "닫기" }]) {
+  return new Promise((resolve) => {
+    const dlg = el("dialog", { "aria-label": title });
+    const close = (v) => { dlg.close(); dlg.remove(); resolve(v); };
+    const body = el("div", { class: "dlg-b" }, build(close));
+    const foot = el("div", { class: "dlg-f" }, actions.map((a) => el("button", { class: (a.primary ? "primary " : "") + (a.danger ? "danger" : ""), type: "button",
+      onclick: async (ev) => { ev.target.disabled = true; try { const r = a.run ? await a.run(close) : undefined; if (r !== false) close(a.value ?? true); } catch (e) { fail(e); } finally { ev.target.disabled = false; } } }, a.label)));
+    dlg.append(el("div", { class: "dlg-h" }, title), body, foot);
+    dlg.addEventListener("cancel", () => resolve(false));
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}
+export const confirmDialog = (msg, label = "확인", danger = false) =>
+  dialog("확인", () => el("p", { class: "flush" }, msg), [{ label: "취소", value: false }, { label, primary: !danger, danger, value: true }]);
+
+// ---------- router ----------
+const routes = [];
+export const route = (re, fn) => routes.push([re, fn]);
+export const go = (hash) => { if (location.hash === hash) render(); else location.hash = hash; };
+export function parseHash() {
+  const h = location.hash.replace(/^#/, "") || "/dashboard";
+  const [path, qs] = h.split("?");
+  return { path, params: Object.fromEntries(new URLSearchParams(qs || "")) };
+}
+export async function render() {
+  const { path, params } = parseHash();
+  const view = $("#view");
+  for (const [re, fn] of routes) {
+    const m = re.exec(path);
+    if (m) {
+      state.onRoute?.(path, params);
+      view.replaceChildren(el("p", { class: "hint" }, "불러오는 중..."));
+      try { await fn(view, m, params); } catch (e) { view.replaceChildren(el("p", { class: "err" }, e.message)); if (e.status === 401) location.reload(); }
+      view.focus({ preventScroll: true });
+      return;
+    }
+  }
+  view.replaceChildren(el("p", { class: "err" }, "페이지를 찾을 수 없습니다"));
+}
+
+// ---------- small components ----------
+export function table(headers, rows, { onRow, cls = "" } = {}) {
+  return el("div", { class: "scroll" }, el("table", { class: "tbl " + cls },
+    el("thead", {}, el("tr", {}, headers.map((h) => el("th", {}, h)))),
+    el("tbody", {}, rows.map((r) => { const cells = r.cells || r; return el("tr", { class: onRow ? "click" : "", onclick: onRow && (() => onRow(r)) },
+      cells.map((c, i) => el("td", { class: typeof c === "number" ? "num" : "" }, typeof c === "number" ? fmtNum(c) : c))); }))));
+}
+export const field = (label, input, hint) => el("div", {}, el("label", {}, label), input, hint && el("div", { class: "hint" }, hint));
+export const empty = (msg) => el("p", { class: "hint" }, msg);
+
+/** Permission entries editor. entries: [{type: user|dept|role|all|deny, id, role}] */
+export function aclEditor(entries, { allowDeny = true } = {}) {
+  const rows = el("div");
+  const users = state.meta?.users || [];
+  const ids = { user: users.map((u) => u.id), dept: [...new Set(users.map((u) => u.dept).filter(Boolean))], role: ["admin", "finance", "hr"], all: ["*"], deny: users.map((u) => u.id) };
+  const dl = el("datalist", { id: "acl-ids" }, [...new Set(Object.values(ids).flat())].map((v) => el("option", { value: v })));
+  function add(e = { type: "user", id: "", role: "viewer" }) {
+    const type = el("select", { "aria-label": "대상 종류" }, [["user", "사용자"], ["dept", "부서"], ["role", "역할"], ["all", "전체 직원"], ...(allowDeny ? [["deny", "제외"]] : [])]
+      .map(([v, l]) => el("option", { value: v, selected: v === e.type }, l)));
+    const id = el("input", { value: e.id === "*" ? "" : e.id, list: "acl-ids", placeholder: "ID", "aria-label": "대상 ID" });
+    const role = el("select", { "aria-label": "권한" }, [["viewer", "열람"], ["editor", "편집"], ["manager", "관리"]].map(([v, l]) => el("option", { value: v, selected: v === e.role }, l)));
+    const sync = () => { id.disabled = type.value === "all"; role.disabled = type.value === "deny"; };
+    type.addEventListener("change", sync); sync();
+    const row = el("div", { class: "acl-row" }, type, id, role, el("button", { type: "button", class: "sm", "aria-label": "삭제", onclick: () => row.remove() }, "✕"));
+    row.get = () => ({ type: type.value, id: type.value === "all" ? "*" : id.value.trim(), ...(type.value === "deny" ? {} : { role: role.value }) });
+    rows.append(row);
+  }
+  entries.forEach(add);
+  const node = el("div", {}, dl, rows, el("button", { type: "button", class: "sm", onclick: () => add() }, "+ 권한 추가"));
+  node.get = () => [...rows.children].map((r) => r.get()).filter((e) => e.type === "all" || e.id);
+  return node;
+}

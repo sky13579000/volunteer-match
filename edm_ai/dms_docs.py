@@ -454,15 +454,14 @@ class DocsMixin:
         if "acl" in pr or row["origin"] == "crawled" and self.admin(p):
             d["entries"] = row["entries"]
             d["effective_entries"] = self._eff_entries(row)
-            d["read_acl"] = self.idx_doc(row).acl.to_dict() if self.idx_doc(row) else None
+            ra = self.derive_acl(row) if row["origin"] == "managed" else (self.idx_doc(row).acl if self.idx_doc(row) else None)
+            d["read_acl"] = ra.to_dict() if ra else None
         d["versions"] = self.versions(p, doc_id) if row["origin"] == "managed" else []
         d["workflow"] = self.workflow_state(p, row)
         gw = self.app.gateway
         if gw:
             link_types = gw.link_types()
-            idx = self.app.engine.index
-            doc = self.idx_doc(row)
-            ents = {e for c in idx.chunks if doc and c.doc_id == doc.id for e in c.entities if e.partition(":")[0] in link_types}
+            ents = {e for e in self.app.extractor.extract(f"{row['title']}\n{text}") if e.partition(":")[0] in link_types}
             d["linked_rows"] = [{"table": r["table"], "title": r["title"], "key": r["key"], "masked": list(r["masked"]),
                                  "values": {r["labels"][c]: v for c, v in r["values"].items()}} for r in gw.lookup(p, ents, limit=8)] if ents else []
         else:

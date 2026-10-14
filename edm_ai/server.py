@@ -18,6 +18,7 @@ from .routes import Raw, build_routes
 
 log = logging.getLogger("edm_ai")
 STATIC = Path(__file__).parent / "static"
+STATIC_NAME = re.compile(r"/([A-Za-z0-9_\-]{1,40})\.(js|css)")
 PUBLIC_SHARE = re.compile(r"/s/[A-Za-z0-9_\-]{20,100}")
 FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/app.css": ("app.css", "text/css"),
          "/share.js": ("share.js", "text/javascript")}
@@ -135,9 +136,12 @@ def make_handler(app: App, demo_login: bool):
             url = urlparse(self.path)
             path, qs = url.path, parse_qs(url.query)
             if method == "GET":
-                if path in FILES:
-                    name, ctype = FILES[path]
-                    return self._send(200, (STATIC / name).read_text("utf-8"), ctype)
+                if path == "/":
+                    return self._send(200, (STATIC / "index.html").read_text("utf-8"), "text/html")
+                sm = STATIC_NAME.fullmatch(path)                         # only plain file names: no slashes, no traversal
+                if sm and (STATIC / f"{sm.group(1)}.{sm.group(2)}").is_file():
+                    return self._send(200, (STATIC / f"{sm.group(1)}.{sm.group(2)}").read_text("utf-8"),
+                                      "text/javascript" if sm.group(2) == "js" else "text/css")
                 if PUBLIC_SHARE.fullmatch(path):                       # /s/<token>: the public landing page (no login)
                     return self._send(200, (STATIC / "share.html").read_text("utf-8"), "text/html")
                 if path == "/api/config":
@@ -173,6 +177,10 @@ def make_handler(app: App, demo_login: bool):
                     raise DmsError(400, "bad request")
                 with lock:
                     result = app.engine.ask(u, q).to_dict()
+                    for e in result["evidence"]:
+                        if e["kind"] == "doc":
+                            r = dms.q1("SELECT id FROM dms_docs WHERE source=? AND deleted_at IS NULL", (e["ref"].split("#")[0],))
+                            e["doc_id"] = r["id"] if r else None
                 return self._send(200, result)
             for meth, rx, fn, mutating in routes:
                 m = rx.fullmatch(path)

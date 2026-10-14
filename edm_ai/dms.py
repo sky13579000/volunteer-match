@@ -231,6 +231,12 @@ class DmsCore:
         return self.app.engine.index.by_source.get(row["source"])
 
     def can_read(self, p, row) -> bool:
+        """Managed documents are judged from their CURRENT state (the very function that feeds the index), never from a
+        possibly stale in-memory index: inside a batch the index reload is deferred. Crawled files use the index."""
+        if row["deleted_at"]:
+            return False
+        if row["origin"] == "managed":
+            return self.derive_acl(row).allows(p)
         d = self.idx_doc(row)
         return bool(d and d.acl.allows(p))
 
