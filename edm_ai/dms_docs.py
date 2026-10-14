@@ -469,6 +469,7 @@ class DocsMixin:
         auto = (self.app.cfg.get("automation") or {}).get("contract_check")
         d["analysis"] = automation.analyze(p, row["title"], text, gw, auto)
         d["history"] = self.store.history(row["source"])
+        d["related"] = self.related(p, doc_id)
         d["comment_count"] = self.q1("SELECT COUNT(*) AS n FROM comments WHERE doc_id=? AND deleted=0", (doc_id,))["n"]
         d["favorite"] = bool(self.q1("SELECT 1 AS x FROM favorites WHERE user_id=? AND doc_id=?", (p.id, doc_id)))
         d["legal_hold"] = bool(row["legal_hold"])

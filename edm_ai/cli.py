@@ -53,6 +53,13 @@ def main(argv=None):
     e = sub.add_parser("eval", help="run golden-set evaluation; exits 1 on any leak or recall < --min-recall")
     e.add_argument("golden")
     e.add_argument("--min-recall", type=float, default=0.9)
+    bk = sub.add_parser("backup", help="consistent snapshot of the document store + stored files (safe while serving)")
+    bk.add_argument("out")
+    rs = sub.add_parser("restore", help="verify and restore a backup into the configured store / repository")
+    rs.add_argument("archive")
+    rs.add_argument("--force", action="store_true", help="replace existing data")
+    vb = sub.add_parser("verify-backup", help="check a backup archive against its manifest")
+    vb.add_argument("archive")
     sub.add_parser("llm-check", help="verify the configured LLM / embedding server (connectivity, citations, grounding)")
     sub.add_parser("verify-audit", help="check the audit hash chain")
     s = sub.add_parser("serve")
@@ -67,7 +74,33 @@ def main(argv=None):
         return run_demo(args)
     if not args.config:
         ap.error("-c/--config is required")
+    if args.cmd == "verify-backup":                     # needs no running store
+        from pathlib import Path
+        from .backup import verify
+        ok, problems = verify(Path(args.archive))
+        print("OK" if ok else "FAILED\n" + "\n".join(problems))
+        sys.exit(0 if ok else 1)
+    if args.cmd == "restore":                           # must run BEFORE the store is opened
+        import json as _json
+        import os
+        from pathlib import Path
+        from .backup import restore
+        cfgp = Path(args.config).resolve()
+        cfg = _json.loads(cfgp.read_text("utf-8"))
+        store_path = Path(os.environ.get("EDM_AI_STORE") or (cfgp.parent / cfg.get("store", "store.db"))).resolve()
+        repo = (cfgp.parent / cfg["dms"]["repo"]).resolve() if cfg.get("dms", {}).get("repo") else store_path.parent / "repo"
+        try:
+            print(_json.dumps(restore(Path(args.archive), store_path, repo, args.force)))
+        except (ValueError, FileExistsError) as e:
+            sys.exit(str(e))
+        sys.exit(0)
     app = App(args.config)
+    if args.cmd == "backup":
+        from pathlib import Path
+        from .backup import backup
+        with app.lock:
+            print(json.dumps(backup(app.store.db, app.dms.repo, Path(args.out))))
+        sys.exit(0)
     if args.cmd == "ingest":
         print(json.dumps(app.ingest()))
     elif args.cmd == "token":

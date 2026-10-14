@@ -39,16 +39,21 @@ class App:
                              embedder=OpenAICompatEmbedder(**emb) if emb else None,
                              pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()),
                              min_coverage=self.cfg.get("retrieval", {}).get("min_coverage", 0.2))
+        users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
+        self.users = {u["id"]: Principal.from_dict(u) for u in users}
+        # e-mail addresses come from users.json ("email" or external.email); they are never returned by any API
+        self.emails = {u["id"]: (u.get("email") or (u.get("external") or {}).get("email")) for u in users if u.get("email") or (u.get("external") or {}).get("email")}
+        # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter request gets a principal
+        self.external = {(k, str(v)): u["id"] for u in users for k, v in (u.get("external") or {}).items()}
         from .dms_all import Dms
+        from .mailer import Mailer
+        smtp = (self.cfg.get("notify") or {}).get("smtp")
+        self.mailer = Mailer(smtp, self.cfg.get("notify", {}).get("base_url", "")) if smtp else None
         dcfg = self.cfg.get("dms", {})
         repo = self._p(dcfg["repo"]) if dcfg.get("repo") else Path(store_path).resolve().parent / "repo"
         self.dms = Dms(self, repo)
         self.dms.sync_crawled()
         self.dms.reindex_all()
-        users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
-        self.users = {u["id"]: Principal.from_dict(u) for u in users}
-        # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter request gets a principal
-        self.external = {(k, str(v)): u["id"] for u in users for k, v in (u.get("external") or {}).items()}
 
     def _p(self, rel: str) -> Path:
         return (self.base / rel).resolve()

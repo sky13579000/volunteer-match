@@ -100,6 +100,26 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.locator('.acl-row').last().getByRole('button').click(); await kim.getByRole('button', { name: '권한 저장' }).click(); await kim.waitForTimeout(700);
   ok('after removing the entry outsider loses it again', (await find('e2e유니크토큰')) === 0);
 
+  // ===== related documents, download restriction, image preview =====
+  await kim.click('.tabs button:has-text("개요")'); await kim.waitForSelector('#rel-add');
+  await kim.fill('#rel-add', 'GEN-2026-0004'); await kim.click('#rel-go');
+  await kim.waitForFunction(() => document.querySelector('#view')?.textContent.includes('GEN-2026-0004 2026 영업 계획'), null, { timeout: 5000 }).catch(() => {});
+  ok('related document is linked', (await kim.textContent('#view')).includes('GEN-2026-0004 2026 영업 계획'));
+  ok('download button available before restriction', (await kim.$$('.page-h ~ .row button:has-text("다운로드")')).length >= 1);
+  await kim.getByRole('button', { name: '정보 편집' }).click(); await kim.waitForSelector('#m-nodl');
+  await kim.check('#m-nodl'); await kim.dlg().getByRole('button', { name: '저장' }).click();
+  await kim.waitForFunction(() => document.querySelector('.page-h')?.textContent.includes('다운로드 제한'), null, { timeout: 5000 }).catch(() => {});
+  ok('download restriction badge shown', (await kim.textContent('.page-h')).includes('다운로드 제한'));
+  ok('download button disappears under restriction', (await kim.$$('.row button:has-text("다운로드")')).length === 0);
+  await kim.getByRole('button', { name: '정보 편집' }).click(); await kim.waitForSelector('#m-nodl'); await kim.uncheck('#m-nodl');
+  await kim.dlg().getByRole('button', { name: '저장' }).click(); await kim.waitForTimeout(700);
+  await kim.hash('#/docs'); await kim.click('#btn-new'); await kim.waitForSelector('dialog[open] #f-file');
+  await kim.setInputFiles('#f-file', FILES + '/pixel.png'); await kim.fill('#f-title', '현장 사진');
+  await kim.dlg().getByRole('button', { name: '등록', exact: true }).click(); await kim.waitForSelector('.tabs');
+  await kim.waitForSelector('img.preview', { timeout: 8000 }).catch(() => {});
+  ok('image documents get an inline preview', (await kim.$$('img.preview')).length === 1);
+  await kim.goto(docUrl); await kim.waitForSelector('.tabs');
+
   // ===== search / facets / highlight / saved search =====
   await kim.hash('#/docs?q=' + encodeURIComponent('영업 계획'));
   ok('search highlights matches with <mark>', (await kim.$$('.snip mark')).length > 0);

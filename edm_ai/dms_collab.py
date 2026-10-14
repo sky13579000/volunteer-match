@@ -95,6 +95,37 @@ class CollabMixin:
     def recent(self, p, limit=10) -> list[dict]:
         return self._docs_from(p, [r["doc_id"] for r in self.q("SELECT doc_id FROM recent WHERE user_id=? ORDER BY ts DESC LIMIT ?", (p.id, limit * 3))])[:limit]
 
+    # ---- related documents ----
+    def _resolve(self, p, other) -> dict:
+        """Accept a document id or a document number. Unreadable == nonexistent."""
+        s = str(other or "").strip()
+        row = self.row(int(s)) if s.isdigit() else (self.q1("SELECT id FROM dms_docs WHERE doc_no=?", (s,)) and self.row(self.q1("SELECT id FROM dms_docs WHERE doc_no=?", (s,))["id"]))
+        if not row or row["deleted_at"] or not self.can_read(p, row):
+            raise DmsError(404, "연결할 문서를 찾을 수 없습니다")
+        return row
+
+    def link_docs(self, p, doc_id, other) -> dict:
+        row = self.get_row(p, doc_id, "edit")
+        o = self._resolve(p, other)
+        if o["id"] == doc_id:
+            raise DmsError(400, "자기 자신과는 연결할 수 없습니다")
+        a, b = sorted((doc_id, o["id"]))
+        self.x("INSERT OR IGNORE INTO doc_links VALUES(?,?,?,?)", (a, b, p.id, now()))
+        self.log(p, row, "linked", o["doc_no"])
+        return {"related": self.related(p, doc_id)}
+
+    def unlink_docs(self, p, doc_id, other_id) -> dict:
+        row = self.get_row(p, doc_id, "edit")
+        a, b = sorted((doc_id, int(other_id)))
+        if not self.x("DELETE FROM doc_links WHERE a=? AND b=?", (a, b)).rowcount:
+            raise DmsError(404, "연결을 찾을 수 없습니다")
+        self.log(p, row, "unlinked", str(other_id))
+        return {"related": self.related(p, doc_id)}
+
+    def related(self, p, doc_id) -> list[dict]:
+        ids = [r["b"] if r["a"] == doc_id else r["a"] for r in self.q("SELECT a,b FROM doc_links WHERE a=? OR b=?", (doc_id, doc_id))]
+        return self._docs_from(p, ids)
+
     # ---- saved searches ----
     def save_search(self, p, name, query: dict) -> dict:
         name = str(name or "").strip()[:60]

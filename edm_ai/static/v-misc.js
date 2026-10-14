@@ -47,8 +47,11 @@ route(/^\/trash$/, async (view) => {
 // ---------------- notifications ----------------
 route(/^\/notifications$/, async (view) => {
   const n = await api("/api/dms/notifications");
+  const prefs = await api("/api/dms/prefs");
   const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""] };
-  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }), el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),
+  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }),
+    prefs.email_available ? el("label", { class: "inline" }, el("input", { type: "checkbox", id: "pref-email", checked: prefs.email, onchange: async (e) => { try { await api("/api/dms/prefs", { method: "PUT", body: { email: e.target.checked } }); toast(e.target.checked ? "메일 알림을 켰습니다" : "메일 알림을 껐습니다"); } catch (x) { fail(x); } } }), "메일로도 받기") : "",
+    el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),
     n.items.length ? el("div", { class: "stack" }, n.items.map((x) => el("div", { class: "card row", "data-unread": x.read ? "0" : "1" }, pill(...(KIND[x.kind] || [x.kind, ""])), el("span", { class: "grow" }, x.read ? x.text : el("b", {}, x.text)), el("span", { class: "hint" }, fmtDate(x.ts)),
       x.doc_id ? el("button", { class: "sm", onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: { ids: [x.id] } }); refreshBell(); go(`#/doc/${x.doc_id}` + (x.kind === "approval_request" ? "?tab=approval" : "")); } }, "열기") : ""))) : empty("알림이 없습니다"));
 });

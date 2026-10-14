@@ -74,6 +74,7 @@ class LifecycleMixin:
         with self.db:
             for t in ("dms_versions", "comments", "shares", "favorites", "recent", "notifications"):
                 self.db.execute(f"DELETE FROM {t} WHERE doc_id=?", (did,))
+            self.db.execute("DELETE FROM doc_links WHERE a=? OR b=?", (did, did))
             for w in self.db.execute("SELECT id FROM workflows WHERE doc_id=?", (did,)).fetchall():
                 self.db.execute("DELETE FROM wf_steps WHERE wf_id=?", (w[0],))
             self.db.execute("DELETE FROM workflows WHERE doc_id=?", (did,))

@@ -13,6 +13,26 @@ class WorkflowMixin:
     def notify(self, user_id: str, kind: str, doc_id, text: str, exclude: str | None = None):
         if user_id and user_id != exclude and user_id in self.app.users:
             self.x("INSERT INTO notifications(user_id,kind,doc_id,text,ts) VALUES(?,?,?,?,?)", (user_id, kind, doc_id, text[:300], now()))
+            self._email(user_id, kind, doc_id)
+
+    def _email(self, user_id: str, kind: str, doc_id):
+        """Optional e-mail copy of an in-app notification. Opt-out per user; never contains document or comment text."""
+        mailer, to = self.app.mailer, self.app.emails.get(user_id)
+        if not mailer or not to:
+            return
+        pref = self.q1("SELECT email FROM user_prefs WHERE user_id=?", (user_id,))
+        if pref and not pref["email"]:
+            return
+        row = self.row(doc_id) if doc_id else None
+        mailer.enqueue(mailer.build(to, kind, row["doc_no"] if row else None, row["title"] if row else None, doc_id))
+
+    def get_prefs(self, p) -> dict:
+        r = self.q1("SELECT email FROM user_prefs WHERE user_id=?", (p.id,))
+        return {"email": bool(r["email"]) if r else True, "email_available": bool(self.app.mailer and self.app.emails.get(p.id))}
+
+    def set_prefs(self, p, email: bool) -> dict:
+        self.x("INSERT INTO user_prefs VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email", (p.id, int(bool(email))))
+        return self.get_prefs(p)
 
     def _wf(self, doc_id, status="pending"):
         w = self.q1("SELECT * FROM workflows WHERE doc_id=? AND status=? ORDER BY id DESC", (doc_id, status))

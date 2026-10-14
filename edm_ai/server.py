@@ -22,7 +22,7 @@ STATIC_NAME = re.compile(r"/([A-Za-z0-9_\-]{1,40})\.(js|css)")
 PUBLIC_SHARE = re.compile(r"/s/[A-Za-z0-9_\-]{20,100}")
 FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/app.css": ("app.css", "text/css"),
          "/share.js": ("share.js", "text/javascript")}
-CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 
 
 def make_handler(app: App, demo_login: bool):

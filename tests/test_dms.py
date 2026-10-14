@@ -121,6 +121,24 @@ class BatchConsistency(Base):
         self.assertIn(r["id"], self.ids("kim", "batchprobe"))                             # index caught up when the batch ended
 
 
+class DownloadRestriction(Base):
+    def test_no_download_blocks_every_export_path_but_not_reading(self):
+        r = self.reg(text="# 제한\n\n다운로드 제한 시험 nodlprobe.")
+        did = r["id"]
+        self.d.update_meta(self.U["kim"], did, props={"no_download": "1"})
+        got = self.d.get(self.U["kim"], did)
+        self.assertNotIn("download", got["perms"])
+        self.assertIn("read", got["perms"])
+        self.assertIn("nodlprobe", got["text"])                                          # reading on screen stays possible
+        self.err(403, self.d.download, self.U["kim"], did)
+        data, info = self.d.export_zip(self.U["kim"], [did])
+        self.assertEqual((info["exported"], info["skipped"]), (0, 1))                      # ZIP export skips it
+        self.err(403, self.d.create_share, self.U["kim"], did, perm="download")            # no downloadable external link either
+        self.assertTrue(self.d.create_share(self.U["kim"], did, perm="view"))              # a view-only link is still allowed
+        self.d.update_meta(self.U["kim"], did, props={})
+        self.assertTrue(self.d.download(self.U["kim"], did))
+
+
 class Approval(Base):
     def ct(self, **kw):
         return self.reg(doc_type="CT", text="# 계약\n\nCT-2024-001 계약금액은 4억 8천만원이다.", **kw)
@@ -432,6 +450,28 @@ class Collaboration(Base):
         self.assertEqual(self.d.saved_searches(self.U["park"]), [])
         self.err(404, self.d.delete_saved_search, self.U["park"], s["id"])
         self.d.delete_saved_search(self.U["kim"], s["id"])
+
+
+class RelatedDocs(Base):
+    def test_links_are_symmetric_permission_aware_and_leak_nothing(self):
+        a, b = self.reg(text="# 가\n\n관련 가."), self.reg(text="# 나\n\n관련 나.")
+        hidden = self.d.register(self.U["park"], "h.md", "# 재무\n\n숨김 문서.".encode(), folder_id=self.f_fin)
+        self.d.link_docs(self.U["kim"], a["id"], b["doc_no"])                              # by document number
+        self.assertEqual([x["id"] for x in self.d.get(self.U["kim"], a["id"])["related"]], [b["id"]])
+        self.assertEqual([x["id"] for x in self.d.get(self.U["kim"], b["id"])["related"]], [a["id"]])   # shows on the other side too
+        self.err(404, self.d.link_docs, self.U["kim"], a["id"], hidden["doc_no"])           # cannot link what you cannot read
+        self.err(404, self.d.link_docs, self.U["kim"], a["id"], "NOPE-1")
+        self.err(400, self.d.link_docs, self.U["kim"], a["id"], a["id"])
+        self.err(404, self.d.link_docs, self.U["jung"], a["id"], b["id"])                   # jung cannot see the source document
+        # b's owner can later grant a colleague access to b only; that person must not see the link to a
+        self.d.set_acl(self.U["kim"], a["id"], entries=[{"type": "user", "id": "park", "role": "viewer"}])
+        self.assertEqual(self.d.get(self.U["park"], a["id"])["related"], [])               # park reads a but not b: b is not revealed
+        self.d.unlink_docs(self.U["kim"], a["id"], b["id"])
+        self.assertEqual(self.d.get(self.U["kim"], b["id"])["related"], [])
+        self.err(404, self.d.unlink_docs, self.U["kim"], a["id"], b["id"])
+        self.d.link_docs(self.U["kim"], a["id"], b["id"])
+        self.d.delete(self.U["kim"], b["id"])
+        self.assertEqual(self.d.get(self.U["kim"], a["id"])["related"], [])               # trashed documents drop out of the list
 
 
 class SearchAndDashboard(Base):

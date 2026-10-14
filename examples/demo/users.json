@@ -8,7 +8,8 @@
     "external": {
       "slack": "U0KIM0001",
       "email": "kim@example.co.kr"
-    }
+    },
+    "email": "kim@example.co.kr"
   },
   {
     "id": "park",
@@ -21,7 +22,8 @@
     "external": {
       "slack": "U0PARK001",
       "email": "park@example.co.kr"
-    }
+    },
+    "email": "park@example.co.kr"
   },
   {
     "id": "lee",
@@ -30,14 +32,16 @@
     "roles": [
       "hr"
     ],
-    "level": 3
+    "level": 3,
+    "email": "lee@example.co.kr"
   },
   {
     "id": "jung",
     "name": "정컨설",
     "dept": "consulting",
     "roles": [],
-    "level": 2
+    "level": 2,
+    "email": "jung@example.co.kr"
   },
   {
     "id": "choi",
@@ -48,7 +52,8 @@
     "external": {
       "slack": "U0CHOI001",
       "email": "choi@partner.example"
-    }
+    },
+    "email": "choi@partner.example"
   },
   {
     "id": "admin",
@@ -57,6 +62,7 @@
     "roles": [
       "admin"
     ],
-    "level": 99
+    "level": 99,
+    "email": "admin@example.co.kr"
   }
 ]

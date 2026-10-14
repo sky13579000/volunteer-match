@@ -5,7 +5,7 @@ const TABS = [["info", "개요"], ["versions", "버전"], ["approval", "결재"]
 const ACTION = { registered: "등록", new_version: "새 버전", restored: "버전 복원", submitted: "결재 요청", approved_step: "결재 승인", rejected: "반려", delegated: "결재 위임",
   workflow_cancelled: "결재 회수", checked_out: "체크아웃", checkout_cancelled: "체크아웃 해제", downloaded: "다운로드", acl_changed: "권한 변경", meta_changed: "정보 변경", moved: "이동",
   deleted: "삭제", restored_from_trash: "휴지통 복원", legal_hold_on: "법적 보류", legal_hold_off: "법적 보류 해제", expired: "만료", expiry_changed: "만료일 변경", commented: "댓글",
-  comment_deleted: "댓글 삭제", share_created: "공유 링크 생성", share_revoked: "공유 링크 폐지", share_viewed: "공유 열람", share_downloaded: "공유 다운로드", indexed: "색인" };
+  comment_deleted: "댓글 삭제", linked: "문서 연결", unlinked: "연결 해제", share_created: "공유 링크 생성", share_revoked: "공유 링크 폐지", share_viewed: "공유 열람", share_downloaded: "공유 다운로드", indexed: "색인" };
 
 route(/^\/doc\/(\d+)$/, async (view, m, params) => {
   const id = Number(m[1]);
@@ -33,7 +33,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
 
   const head = el("div", {},
     el("div", { class: "hint" }, "문서함 / " + (d.folder_path || "")),
-    el("div", { class: "page-h" }, el("h1", {}, d.title), statusPill(d.status), d.legal_hold ? pill("법적 보류", "bad") : "", d.locked_by ? pill("체크아웃 " + d.locked_by, "warn") : ""),
+    el("div", { class: "page-h" }, el("h1", {}, d.title), statusPill(d.status), d.legal_hold ? pill("법적 보류", "bad") : "", d.locked_by ? pill("체크아웃 " + d.locked_by, "warn") : "", d.props?.no_download ? pill("다운로드 제한", "warn") : ""),
     el("div", { class: "hint" }, `${d.doc_no} · ${typeName(d.doc_type)} · 소유 ${userName(d.owner)} · 현행 ${d.effective_ver ? "v" + d.effective_ver : "없음"}${d.current_ver !== d.effective_ver ? ` / 최신 v${d.current_ver}` : ""}`),
     el("div", { class: "row sec" }, actions));
   if (d.readable === false) {
@@ -85,9 +85,13 @@ function metaDialog(d, reload) {
   const title = el("input", { id: "m-title", value: d.title }), tags = el("input", { id: "m-tags", value: d.tags.join(", ") }), desc = el("textarea", { id: "m-desc" }, d.description || "");
   const props = el("textarea", { id: "m-props", placeholder: "항목: 값 (한 줄에 하나)" }, Object.entries(d.props || {}).map(([k, v]) => `${k}: ${v}`).join("\n"));
   const exp = el("input", { type: "date", id: "m-exp", value: d.expires_at || "" });
-  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 한빛전자"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다")),
+  const nodl = el("input", { type: "checkbox", id: "m-nodl", checked: !!d.props?.no_download });
+  props.value = Object.entries(d.props || {}).filter(([k]) => k !== "no_download").map(([k, v]) => `${k}: ${v}`).join("\n");
+  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 한빛전자"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
+    el("label", { class: "inline" }, nodl, "다운로드 제한 (파일 반출·외부 공유 다운로드·ZIP 내보내기 차단. 화면 열람은 가능)")),
     [{ label: "취소", value: false }, { label: "저장", primary: true, run: async () => {
       const pr = {}; for (const line of props.value.split("\n")) { const i = line.indexOf(":"); if (i > 0) pr[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+      if (nodl.checked) pr.no_download = "1";
       await api("/api/docs/" + d.id, { method: "PUT", body: { title: title.value, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value, props: pr, expires_at: exp.value || null } }); toast("저장했습니다"); reload(); } }]);
 }
 
@@ -113,9 +117,29 @@ function infoTab(d, reload) {
   const rows = d.linked_rows?.length ? el("div", { class: "sec" }, el("h3", {}, "연결된 업무 DB 행"), d.linked_rows.map((r) => el("div", { class: "ev row" }, el("b", {}, `${r.title} · ${r.key}`),
     el("div", { class: "t" }, Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join("\n")), r.masked.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + r.masked.join(", ")) : ""))) : "";
   return el("div", {}, dl, el("div", { class: "row sec" }, lifecycle), a.summary ? el("div", { class: "sec" }, el("h3", {}, `자동 요약 · ${a.category}`), el("p", { class: "flush" }, a.summary)) : "",
-    fields, checks, rows, el("div", { class: "sec" }, el("h3", {}, `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? el("pre", { class: "body" }, d.text) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 열람 가능한 버전이 없습니다)")));
+    fields, checks, rows, relatedBlock(d, reload), imagePreview(d), el("div", { class: "sec" }, el("h3", {}, `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? el("pre", { class: "body" }, d.text) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 열람 가능한 버전이 없습니다)")));
 }
 const can = (d, p) => (d.perms || []).includes(p);
+
+
+function relatedBlock(d, reload) {
+  const add = el("input", { id: "rel-add", placeholder: "문서번호 (예: GEN-2026-0001)", "aria-label": "연결할 문서번호" });
+  return el("div", { class: "sec" }, el("h3", {}, "관련 문서"),
+    d.related?.length ? table(["문서", "상태", ""], d.related.map((r) => [el("button", { class: "link", onclick: () => go("#/doc/" + r.id) }, `${r.doc_no} ${r.title}`), statusPill(r.status),
+      can(d, "edit") ? el("button", { class: "sm", "aria-label": "연결 해제", onclick: async () => { await api(`/api/docs/${d.id}/links/${r.id}`, { method: "DELETE" }); toast("연결을 해제했습니다"); reload(); } }, "해제") : ""])) : empty("연결된 문서가 없습니다"),
+    can(d, "edit") ? el("div", { class: "row" }, add, el("button", { class: "sm", id: "rel-go", onclick: async () => { try { await api(`/api/docs/${d.id}/links`, { method: "POST", body: { other: add.value } }); toast("연결했습니다"); reload(); } catch (e) { fail(e); } } }, "연결")) : "");
+}
+
+const IMG = /\.(png|jpe?g|gif|webp)$/i;
+/** Inline preview for raster images. Only when the viewer may download: a preview must not bypass a download restriction. */
+function imagePreview(d) {
+  const ver = (d.versions || []).find((v) => v.ver === d.viewing_ver);
+  if (!ver || !IMG.test(ver.filename) || !can(d, "download")) return "";
+  const box = el("div", { class: "sec" }, el("h3", {}, "이미지 미리보기"), el("p", { class: "hint" }, "불러오는 중..."));
+  api(`/api/docs/${d.id}/download?ver=${ver.ver}`, { raw: true }).then(async (r) => { const blob = await r.blob();
+    box.replaceChildren(el("h3", {}, "이미지 미리보기"), el("img", { class: "preview", alt: d.title, src: URL.createObjectURL(blob) })); }).catch(() => box.remove());
+  return box;
+}
 
 async function versionsTab(d, reload) {
   const vs = await api(`/api/docs/${d.id}/versions`);

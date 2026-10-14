@@ -223,6 +223,14 @@ def build_routes(app):
     def _recent(req, u, m, qs):
         return d.recent(u, 20)
 
+    @route("GET", r"/api/dms/prefs")
+    def _prefs(req, u, m, qs):
+        return d.get_prefs(u)
+
+    @route("PUT", r"/api/dms/prefs")
+    def _setprefs(req, u, m, qs):
+        return d.set_prefs(u, bool(req.body(1024).get("email", True)))
+
     @route("GET", r"/api/dms/saved")
     def _saved(req, u, m, qs):
         return d.saved_searches(u)
@@ -243,6 +251,14 @@ def build_routes(app):
     @route("POST", r"/api/dms/notifications/read")
     def _read(req, u, m, qs):
         return d.mark_read(u, req.body(8192).get("ids"))
+
+    @route("POST", r"/api/docs/(\d+)/links")
+    def _link(req, u, m, qs):
+        return d.link_docs(u, i(m), req.body(4096).get("other"))
+
+    @route("DELETE", r"/api/docs/(\d+)/links/(\d+)")
+    def _unlink(req, u, m, qs):
+        return d.unlink_docs(u, i(m), i(m, 2))
 
     # ---- sharing ----
     @route("GET", r"/api/docs/(\d+)/shares")

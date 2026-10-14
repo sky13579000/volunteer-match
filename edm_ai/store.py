@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS comments(
 CREATE TABLE IF NOT EXISTS notifications(
   id INTEGER PRIMARY KEY, user_id TEXT, kind TEXT, doc_id INTEGER, text TEXT, ts TEXT, read INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read);
+CREATE TABLE IF NOT EXISTS doc_links(a INTEGER, b INTEGER, created_by TEXT, ts TEXT, PRIMARY KEY(a, b));
+CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS recent(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS saved_searches(id INTEGER PRIMARY KEY, user_id TEXT, name TEXT, query TEXT, ts TEXT);
@@ -78,6 +80,7 @@ class DocumentStore:
     """EDM-side store: documents + chunks + ACLs in SQLite (swap for any DB; no server needed on-prem)."""
 
     def __init__(self, path: str = ":memory:"):
+        self.path = path
         self.db = sqlite3.connect(path, check_same_thread=False)  # callers serialise access (see server.py)
         self.db.execute("PRAGMA foreign_keys=ON")
         self.db.executescript(SCHEMA)
