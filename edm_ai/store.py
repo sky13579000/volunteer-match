@@ -11,6 +11,7 @@ from .models import Acl, Chunk, Document
 
 # Bump whenever chunking / parsing / entity extraction changes, so unchanged files are re-processed.
 PIPELINE_VERSION = "2"
+MANAGED_PREFIX = "dms/"      # index sources of repository-managed documents; the folder crawler never touches them
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents(
@@ -27,6 +28,47 @@ CREATE TABLE IF NOT EXISTS acl_overrides(
   source TEXT PRIMARY KEY, acl TEXT, by_user TEXT, ts TEXT);
 CREATE TABLE IF NOT EXISTS doc_history(
   id INTEGER PRIMARY KEY, source TEXT, ts TEXT, user_id TEXT, action TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS folders(
+  id INTEGER PRIMARY KEY, parent_id INTEGER, name TEXT NOT NULL, owner TEXT, created TEXT,
+  inherit INTEGER DEFAULT 1, entries TEXT DEFAULT '[]', origin TEXT DEFAULT 'managed', open_create INTEGER DEFAULT 0,
+  UNIQUE(parent_id, name));
+CREATE TABLE IF NOT EXISTS doc_types(
+  code TEXT PRIMARY KEY, name TEXT, pattern TEXT, retention_years INTEGER DEFAULT 0,
+  approval_required INTEGER DEFAULT 0, default_approvers TEXT DEFAULT '[]', active INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS counters(key TEXT PRIMARY KEY, n INTEGER);
+CREATE TABLE IF NOT EXISTS dms_docs(
+  id INTEGER PRIMARY KEY, doc_no TEXT UNIQUE, source TEXT UNIQUE, title TEXT, folder_id INTEGER,
+  doc_type TEXT, origin TEXT DEFAULT 'managed', owner TEXT, created TEXT, updated TEXT,
+  current_ver INTEGER DEFAULT 0, effective_ver INTEGER, status TEXT DEFAULT 'draft',
+  tags TEXT DEFAULT '[]', props TEXT DEFAULT '{}', description TEXT DEFAULT '',
+  level INTEGER DEFAULT 0, inherit INTEGER DEFAULT 1, entries TEXT DEFAULT '[]',
+  approved_at TEXT, retention_until TEXT, legal_hold INTEGER DEFAULT 0,
+  expires_at TEXT, expire_notified INTEGER DEFAULT 0,
+  locked_by TEXT, locked_at TEXT, deleted_at TEXT, deleted_by TEXT, deleted_folder INTEGER);
+CREATE INDEX IF NOT EXISTS ix_dms_folder ON dms_docs(folder_id);
+CREATE TABLE IF NOT EXISTS dms_versions(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, ver INTEGER, filename TEXT, size INTEGER, sha256 TEXT,
+  path TEXT, status TEXT DEFAULT 'draft', created_by TEXT, created TEXT, comment TEXT DEFAULT '',
+  text TEXT DEFAULT '', UNIQUE(doc_id, ver));
+CREATE TABLE IF NOT EXISTS workflows(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, ver INTEGER, requester TEXT, mode TEXT DEFAULT 'sequential',
+  status TEXT DEFAULT 'pending', note TEXT DEFAULT '', created TEXT, completed TEXT);
+CREATE TABLE IF NOT EXISTS wf_steps(
+  id INTEGER PRIMARY KEY, wf_id INTEGER, ord INTEGER, approver TEXT, status TEXT DEFAULT 'pending',
+  comment TEXT DEFAULT '', acted_at TEXT, delegated_from TEXT);
+CREATE TABLE IF NOT EXISTS comments(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, user_id TEXT, text TEXT, ts TEXT, parent_id INTEGER, deleted INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS notifications(
+  id INTEGER PRIMARY KEY, user_id TEXT, kind TEXT, doc_id INTEGER, text TEXT, ts TEXT, read INTEGER DEFAULT 0);
+CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id, read);
+CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
+CREATE TABLE IF NOT EXISTS recent(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
+CREATE TABLE IF NOT EXISTS saved_searches(id INTEGER PRIMARY KEY, user_id TEXT, name TEXT, query TEXT, ts TEXT);
+CREATE TABLE IF NOT EXISTS shares(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, ver INTEGER, token_hash TEXT UNIQUE, created_by TEXT, created TEXT,
+  expires TEXT, max_dl INTEGER DEFAULT 0, dl_count INTEGER DEFAULT 0, views INTEGER DEFAULT 0,
+  pw_salt TEXT, pw_hash TEXT, perm TEXT DEFAULT 'view', revoked INTEGER DEFAULT 0,
+  fails INTEGER DEFAULT 0, locked_until REAL DEFAULT 0, note TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS embeddings(
   chunk_id INTEGER REFERENCES chunks(id) ON DELETE CASCADE, model TEXT, vec TEXT, PRIMARY KEY(chunk_id, model));
 """
@@ -58,7 +100,8 @@ class DocumentStore:
         return True
 
     def prune(self, keep_sources: set[str]) -> int:
-        gone = [r[0] for r in self.db.execute("SELECT source FROM documents") if r[0] not in keep_sources]
+        gone = [r[0] for r in self.db.execute("SELECT source FROM documents")
+                if r[0] not in keep_sources and not r[0].startswith(MANAGED_PREFIX)]
         with self.db:
             self.db.executemany("DELETE FROM documents WHERE source=?", [(s,) for s in gone])
         return len(gone)
@@ -72,6 +115,10 @@ class DocumentStore:
 
     def _migrate(self):
         """v0.1 -> v0.2: audit gains prev/hash. Legacy rows are chained retroactively (tamper evidence starts now)."""
+        fcols = {r[1] for r in self.db.execute("PRAGMA table_info(folders)")}
+        if fcols and "open_create" not in fcols:
+            with self.db:
+                self.db.execute("ALTER TABLE folders ADD COLUMN open_create INTEGER DEFAULT 0")
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(audit)")}
         if "hash" in cols:
             return
@@ -106,6 +153,11 @@ class DocumentStore:
 
     def acl_overrides(self) -> dict[str, Acl]:
         return {r[0]: Acl.from_dict(json.loads(r[1])) for r in self.db.execute("SELECT source, acl FROM acl_overrides")}
+
+    def forget_index(self, source: str):
+        """Remove a document from the search index only (managed documents keep their DMS rows)."""
+        with self.db:
+            self.db.execute("DELETE FROM documents WHERE source=?", (source,))
 
     def forget(self, source: str):
         with self.db:

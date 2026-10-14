@@ -190,5 +190,59 @@
     "webhook": {
       "secret_env": "EDM_AI_WEBHOOK_SECRET"
     }
+  },
+  "dms": {
+    "external_share": {
+      "enabled": true,
+      "max_days": 30,
+      "max_level": 1
+    },
+    "folders": [
+      {
+        "path": "영업팀",
+        "entries": [
+          {
+            "type": "dept",
+            "id": "sales",
+            "role": "editor"
+          },
+          {
+            "type": "dept",
+            "id": "finance",
+            "role": "viewer"
+          }
+        ]
+      },
+      {
+        "path": "재무팀",
+        "entries": [
+          {
+            "type": "dept",
+            "id": "finance",
+            "role": "editor"
+          }
+        ]
+      },
+      {
+        "path": "인사팀",
+        "entries": [
+          {
+            "type": "role",
+            "id": "hr",
+            "role": "manager"
+          }
+        ]
+      },
+      {
+        "path": "공용/규정",
+        "entries": [
+          {
+            "type": "all",
+            "id": "*",
+            "role": "viewer"
+          }
+        ]
+      }
+    ]
   }
 }

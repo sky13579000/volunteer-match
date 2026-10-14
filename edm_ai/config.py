@@ -39,8 +39,12 @@ class App:
                              embedder=OpenAICompatEmbedder(**emb) if emb else None,
                              pii_reveal_roles=self.cfg.get("pii", {}).get("reveal_roles", ()),
                              min_coverage=self.cfg.get("retrieval", {}).get("min_coverage", 0.2))
-        from .edm import Edm
-        self.edm = Edm(self)
+        from .dms_all import Dms
+        dcfg = self.cfg.get("dms", {})
+        repo = self._p(dcfg["repo"]) if dcfg.get("repo") else Path(store_path).resolve().parent / "repo"
+        self.dms = Dms(self, repo)
+        self.dms.sync_crawled()
+        self.dms.reindex_all()
         users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
         self.users = {u["id"]: Principal.from_dict(u) for u in users}
         # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter request gets a principal
@@ -54,6 +58,7 @@ class App:
         with self.lock:
             stats = ingest_dir(self._p(d["root"]), self._p(d["manifest"]) if d.get("manifest") else None,
                                self.store, self.extractor)
+            self.dms.sync_crawled()
             if stats["added"] or stats["pruned"]:
                 self.engine.reload()   # swaps the index only when something changed
         return stats

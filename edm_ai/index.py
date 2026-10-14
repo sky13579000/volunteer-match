@@ -22,6 +22,7 @@ class Index:
     def __init__(self, docs: dict[int, Document], chunks: list[Chunk], dense: list[list[float]] | None = None,
                  fuzzy_min: float = 0.35, dense_min: float = 0.55, min_coverage: float = 0.2):
         self.docs, self.chunks, self.dense = docs, chunks, dense
+        self.by_source = {d.source: d for d in docs.values()}
         self.fuzzy_min, self.dense_min, self.min_coverage = fuzzy_min, dense_min, min_coverage
         self.token_sets: list[frozenset] = []
         self.postings: dict[str, dict[int, int]] = defaultdict(dict)

@@ -159,15 +159,19 @@ class Http(unittest.TestCase):
         c = EdmClient(self.base, token=auth.issue("t" * 32, "kim"))
         ans = c.ask("한빛전자 계약 금액")
         self.assertTrue(ans["evidence"])
-        self.assertTrue(c.docs("지체상금"))
+        self.assertTrue(c.search("지체상금")["items"])
         with self.assertRaises(EdmApiError) as cm:
             EdmClient(self.base, token="bad").ask("x")
         self.assertEqual(cm.exception.status, 401)
         f = Path(self.tmp.name) / "client_up.md"
         f.write_text("# 클라이언트\n\n클라이언트 업로드 본문입니다 클라이언트토큰.", "utf-8")
-        d = c.upload(str(f))
-        self.assertEqual(d["source"], "uploads/client_up.md")
-        self.assertEqual(c.delete(d["id"])["deleted"], "uploads/client_up.md")
+        d = c.upload(str(f), doc_type="GEN", tags=["클라이언트"])
+        self.assertRegex(d["doc_no"], r"^GEN-\d{4}-\d{4}$")
+        self.assertEqual(c.search("클라이언트토큰")["items"][0]["id"], d["id"])
+        name, data = c.download(d["id"])
+        self.assertEqual((name, data), ("client_up.md", f.read_bytes()))
+        self.assertTrue(c.comment(d["id"], "클라이언트 댓글")["id"])
+        self.assertEqual(c.delete(d["id"])["deleted"], d["doc_no"])
         self.assertEqual(c.alerts(), [])
 
 
