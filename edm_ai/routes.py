@@ -49,6 +49,28 @@ def build_routes(app):
     def _dash(req, u, m, qs):
         return d.dashboard(u)
 
+    @route("GET", r"/api/dms/templates")
+    def _templates(req, u, m, qs):
+        return {"templates": d.templates(u)}
+
+    @route("POST", r"/api/dms/templates/render")
+    def _tpl_render(req, u, m, qs):
+        b = req.body(65536)
+        return d.render_template(u, b.get("template_id"), b.get("values") or {}, b.get("title", ""))
+
+    @route("GET", r"/api/docs/(\d+)/text")
+    def _text_get(req, u, m, qs):
+        return d.read_text(u, i(m))
+
+    @route("PUT", r"/api/docs/(\d+)/text")
+    def _text_put(req, u, m, qs):
+        b = req.body(1_300_000)
+        return d.edit_text(u, i(m), b.get("text"), b.get("comment", ""))
+
+    @route("GET", r"/api/dms/calendar")
+    def _calendar(req, u, m, qs):
+        return d.calendar(u, q1(qs, "month"))
+
     @route("GET", r"/api/alerts")
     def _alerts(req, u, m, qs):
         return d.alerts(u)

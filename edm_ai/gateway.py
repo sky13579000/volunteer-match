@@ -94,6 +94,18 @@ class SqlGateway:
         return out
 
 
+    def rows(self, p: Principal, table: str, columns: list[str], limit: int = 500) -> list[dict]:
+        """Visible rows of one whitelisted table with only the requested columns (row policy applied; a column the caller
+        cannot read makes the whole call return nothing, so a masked value is never inferred from what comes back)."""
+        t = self.tables.get(table)
+        if not t or any(c not in t["columns"] or not self._col_visible(t["columns"][c], p) for c in columns):
+            return []
+        clause, params = self._row_clause(t, p)
+        if clause is None:
+            return []
+        sql = f"SELECT {', '.join(_ident(c) for c in columns)} FROM {_ident(table)} WHERE {clause} {self.db.limit(limit)}"
+        return [dict(r) for r in self.db.query(sql, params)]
+
     def metrics_for(self, question: str) -> list[dict]:
         return [m for m in self.metrics if any(k in question for k in m["keywords"])]
 

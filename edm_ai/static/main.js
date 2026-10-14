@@ -1,18 +1,27 @@
 import { $, api, el, fail, go, parseHash, render, state } from "./core.js";
 import "./v-docs.js";
 import "./v-doc.js";
+import "./v-cal.js";
+import "./v-edit.js";
 import { refreshBell } from "./v-misc.js";
+import { icon } from "./icons.js";
 
 const NAV = [
-  ["", [["#/dashboard", "대시보드"], ["#/chat", "AI 질의응답"]]],
-  ["문서", [["#/docs", "문서함"], ["#/docs?favorites=1", "즐겨찾기"], ["#/docs?mine=1", "내가 올린 문서"], ["#/trash", "휴지통"]]],
-  ["업무", [["#/tasks", "결재함", "tasks"], ["#/notifications", "알림"], ["#/alerts", "문서↔DB 불일치"]]],
+  ["", [["#/dashboard", "대시보드", "home"], ["#/chat", "AI 질의응답", "sparkles"]]],
+  ["문서", [["#/docs", "문서함", "folder"], ["#/docs?favorites=1", "즐겨찾기", "star"], ["#/docs?mine=1", "내가 올린 문서", "user"], ["#/trash", "휴지통", "trash"]]],
+  ["업무", [["#/tasks", "결재함", "task", "tasks"], ["#/notifications", "알림", "bell"], ["#/calendar", "일정 캘린더", "calendar"], ["#/alerts", "문서↔DB 불일치", "alert"]]],
 ];
-const ADMIN = ["관리", [["#/admin/audit", "감사 로그"], ["#/admin/types", "문서유형 · 번호 · 보존"], ["#/admin/stats", "현황 · 유지관리"]]];
+const ADMIN = ["관리", [["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
 
 function buildNav() {
   const groups = state.me.is_admin ? [...NAV, ADMIN] : NAV;
-  $("#nav").replaceChildren(...groups.flatMap(([title, items]) => [title ? el("div", { class: "grp" }, title) : "", ...items.map(([href, label]) => el("a", { href }, label))]));
+  $("#nav").replaceChildren(...groups.flatMap(([title, items]) => [title ? el("div", { class: "grp" }, title) : "",
+    ...items.map(([href, label, ic, badge]) => el("a", { href, "data-badge": badge || false }, icon(ic || "file", 18), el("span", { class: "t" }, label), badge ? el("span", { class: "nb", id: "nb-" + badge, hidden: true }) : ""))]));
+}
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme");
+  const dark = t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches);
+  $("#theme").replaceChildren(icon(dark ? "sun" : "moon", 16), dark ? "라이트" : "다크");
 }
 state.onRoute = (path, params) => {
   const cur = "#" + path + (Object.keys(params).length && [...document.querySelectorAll("#nav a")].some((a) => a.getAttribute("href") === "#" + path + "?" + new URLSearchParams(params)) ? "?" + new URLSearchParams(params) : "");
@@ -26,7 +35,9 @@ async function enter() {
   $("#login").hidden = true;
   $("#shell").hidden = false;
   $("#ver").textContent = "ICC JEJU 플랫폼 v" + (state.cfg.version || "?");
-  $("#who").textContent = `${state.me.name} · ${state.me.dept || "-"} · L${state.me.level}`;
+  $("#who-name").textContent = state.me.name;
+  $("#who-sub").textContent = `${state.me.dept || "-"} · 보안등급 L${state.me.level}${state.me.is_admin ? " · 관리자" : ""}`;
+  $("#avatar").textContent = (state.me.name || "?").slice(0, 1);
   buildNav();
   refreshBell();
   setInterval(refreshBell, 60000);
@@ -34,8 +45,31 @@ async function enter() {
   await render();
 }
 
+function chrome() {
+  for (const id of ["hero-mark", "brand-mark"]) $("#" + id).append(icon("building", id === "hero-mark" ? 22 : 19));
+  $("#search-ic").append(icon("search", 16));
+  $("#bell-ic").append(icon("bell", 19));
+  $("#logout").append(icon("logout", 16), "로그아웃");
+  const pts = [["shield", "권한이 곧 검색 범위 — 볼 수 없는 문서는 AI도 보지 못합니다"], ["book", "모든 답변에 출처 문서와 DB 행을 인용합니다"], ["history", "버전 · 결재 · 보존기간 · 감사 로그를 한 곳에서"]];
+  $("#hero-points").append(...pts.map(([ic, t]) => el("li", {}, icon(ic, 18), t)));
+  $("#hero-foot").textContent = "제주국제컨벤션센터 · 문서·AI 플랫폼";
+  let t = null;
+  try { t = localStorage.getItem("theme"); } catch { /* ignore */ }
+  applyTheme(t);
+  $("#theme").addEventListener("click", () => {
+    const dark = document.documentElement.getAttribute("data-theme") === "dark" || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    const next = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", next); } catch { /* ignore */ }
+    applyTheme(next);
+  });
+  document.addEventListener("keydown", (e) => {                           // "/" focuses the search box (like most document tools)
+    if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.querySelector("dialog[open]")) { e.preventDefault(); $("#top-q").focus(); }
+  });
+}
+
 async function boot() {
   state.cfg = await (await fetch("/api/config")).json();
+  chrome();
   $("#top-search").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#top-q").value.trim(); if (q) go("#/docs?q=" + encodeURIComponent(q)); });
   $("#bell").addEventListener("click", () => go("#/notifications"));
   $("#logout").addEventListener("click", () => {

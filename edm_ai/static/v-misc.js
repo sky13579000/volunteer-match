@@ -1,4 +1,5 @@
-import { STATUS, api, confirmDialog, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { STATUS, api, confirmDialog, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, setNavBadge, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { icon } from "./icons.js";
 import { registerDialog } from "./v-docs.js";
 
 const open = (id) => go("#/doc/" + id);
@@ -8,19 +9,24 @@ const docLink = (d, label) => el("button", { class: "link", onclick: () => open(
 route(/^\/dashboard$/, async (view) => {
   const d = await api("/api/dms/dashboard");
   const c = d.counts;
-  const kpi = (n, label, hot, href) => el("a", { class: "kpi" + (hot && n ? " hot" : ""), href: href || "#/dashboard" }, el("b", {}, fmtNum(n)), el("span", {}, label));
-  const bars = (items, key, label) => { const max = Math.max(1, ...items.map((i) => i.count)); return el("div", { class: "bars" }, items.length ? items.map((i) => el("div", { class: "bar" }, el("span", {}, label(i)), el("i", { "data-w": Math.round((i.count / max) * 100) }), el("span", {}, i.count))) : empty("데이터 없음")); };
+  const kpi = (n, label, ic, hot, href) => el("a", { class: "kpi" + (hot && n ? " hot" : ""), href: href || "#/dashboard" }, icon(ic, 26), el("b", {}, fmtNum(n)), el("span", {}, label));
+  const bars = (items, key, label) => { const max = Math.max(1, ...items.map((i) => i.count)); return el("div", { class: "bars" }, items.length ? items.map((i) => el("div", { class: "bar" }, el("span", {}, label(i)), el("div", { class: "tr" }, el("i", { "data-w": Math.round((i.count / max) * 100) })), el("span", {}, i.count))) : empty("데이터 없음", "chart")); };
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "좋은 아침입니다" : hour < 18 ? "안녕하세요" : "수고 많으셨습니다";
+  const todo = c.tasks ? `처리할 결재가 ${c.tasks}건 있습니다.` : c.expiring_soon ? `곧 만료되는 문서가 ${c.expiring_soon}건 있습니다.` : "오늘 처리할 긴급 업무가 없습니다.";
   view.replaceChildren(
-    el("div", { class: "page-h" }, el("h1", {}, `안녕하세요, ${state.me.name}님`), el("span", { class: "grow" }), el("button", { class: "primary", onclick: () => registerDialog(1).catch(fail) }, "+ 새 문서")),
-    el("div", { class: "kpis" }, kpi(c.readable, "열람 가능한 문서", false, "#/docs"), kpi(c.mine, "내가 올린 문서", false, "#/docs?mine=1"), kpi(c.drafts, "작성 중", false, "#/docs?mine=1&status=draft"),
-      kpi(c.in_review, "결재 진행 중", false, "#/docs?mine=1&status=in_review"), kpi(c.tasks, "내가 처리할 결재", true, "#/tasks"), kpi(c.expiring_soon, "만료 임박", true, "#/docs?mine=1"), kpi(c.unread, "읽지 않은 알림", true, "#/notifications")),
+    el("section", { class: "welcome" }, el("h1", {}, `${greet}, ${state.me.name}님`), el("p", {}, todo),
+      el("div", { class: "row" }, el("button", { class: "primary", onclick: () => registerDialog(1).catch(fail) }, icon("plus", 16), "새 문서 등록"),
+        el("button", { onclick: () => go("#/new") }, icon("file", 16), "양식으로 작성"), el("button", { onclick: () => go("#/chat") }, icon("sparkles", 16), "AI에게 질문"), el("button", { onclick: () => go("#/docs") }, icon("folder", 16), "문서함 열기"))),
+    el("div", { class: "kpis" }, kpi(c.readable, "열람 가능한 문서", "folder", false, "#/docs"), kpi(c.mine, "내가 올린 문서", "user", false, "#/docs?mine=1"), kpi(c.drafts, "작성 중", "edit", false, "#/docs?mine=1&status=draft"),
+      kpi(c.in_review, "결재 진행 중", "clock", false, "#/docs?mine=1&status=in_review"), kpi(c.tasks, "내가 처리할 결재", "task", true, "#/tasks"), kpi(c.expiring_soon, "만료 임박", "alert", true, "#/docs?mine=1"), kpi(c.unread, "읽지 않은 알림", "bell", true, "#/notifications")),
     el("div", { class: "grid2 sec" },
-      el("div", { class: "card" }, el("h3", {}, "내가 처리할 결재"), d.tasks.length ? table(["문서", "요청자", "요청일"], d.tasks.map((t) => [docLink(t, `${t.doc_no} ${t.title}`), userName(t.requester), fmtDay(t.since)])) : empty("처리할 결재가 없습니다")),
-      el("div", { class: "card" }, el("h3", {}, "내가 올린 결재"), d.requests.length ? table(["문서", "상태"], d.requests.map((t) => [docLink(t, `${t.doc_no} ${t.title}`), pill({ pending: "진행 중", approved: "승인", rejected: "반려", cancelled: "회수" }[t.status] || t.status, { approved: "ok", rejected: "bad", pending: "info" }[t.status] || "")])) : empty("올린 결재가 없습니다")),
-      el("div", { class: "card" }, el("h3", {}, "만료 예정 (30일 이내)"), d.expiring.length ? table(["문서", "만료일"], d.expiring.map((t) => [docLink(t), t.expires_at])) : empty("만료 예정 문서가 없습니다")),
-      el("div", { class: "card" }, el("h3", {}, "최근 본 문서"), d.recent.length ? table(["문서", "수정일"], d.recent.map((t) => [docLink(t), fmtDay(t.updated)])) : empty("아직 없습니다")),
-      el("div", { class: "card" }, el("h3", {}, "즐겨찾기"), d.favorites.length ? table(["문서", "상태"], d.favorites.map((t) => [docLink(t), statusPill(t.status)])) : empty("즐겨찾기한 문서가 없습니다")),
-      el("div", { class: "card" }, el("h3", {}, "유형별 문서"), bars(d.by_type, "code", (i) => i.name), el("h3", { class: "sec" }, "상태별"), bars(d.by_status, "status", (i) => STATUS[i.status]?.[0] || i.status),
+      el("div", { class: "card" }, el("h3", {}, icon("task", 15), "내가 처리할 결재"), d.tasks.length ? table(["문서", "요청자", "요청일"], d.tasks.map((t) => [docLink(t, `${t.doc_no} ${t.title}`), userName(t.requester), fmtDay(t.since)])) : empty("처리할 결재가 없습니다", "task")),
+      el("div", { class: "card" }, el("h3", {}, icon("upload", 15), "내가 올린 결재"), d.requests.length ? table(["문서", "상태"], d.requests.map((t) => [docLink(t, `${t.doc_no} ${t.title}`), pill({ pending: "진행 중", approved: "승인", rejected: "반려", cancelled: "회수" }[t.status] || t.status, { approved: "ok", rejected: "bad", pending: "info" }[t.status] || "")])) : empty("올린 결재가 없습니다", "upload")),
+      el("div", { class: "card" }, el("h3", {}, icon("alert", 15), "만료 예정 (30일 이내)"), d.expiring.length ? table(["문서", "만료일"], d.expiring.map((t) => [docLink(t), t.expires_at])) : empty("만료 예정 문서가 없습니다", "calendar")),
+      el("div", { class: "card" }, el("h3", {}, icon("history", 15), "최근 본 문서"), d.recent.length ? table(["문서", "수정일"], d.recent.map((t) => [docLink(t), fmtDay(t.updated)])) : empty("아직 없습니다", "history")),
+      el("div", { class: "card" }, el("h3", {}, icon("star", 15), "즐겨찾기"), d.favorites.length ? table(["문서", "상태"], d.favorites.map((t) => [docLink(t), statusPill(t.status)])) : empty("즐겨찾기한 문서가 없습니다", "star")),
+      el("div", { class: "card" }, el("h3", {}, icon("chart", 15), "유형별 문서"), bars(d.by_type, "code", (i) => i.name), el("h3", { class: "sec" }, "상태별"), bars(d.by_status, "status", (i) => STATUS[i.status]?.[0] || i.status),
         el("p", { class: "hint sec" }, `저장 용량 ${fmtSize(d.storage_bytes)} (${d.storage_scope === "all" ? "전체" : "내 문서"})`))));
   for (const i of view.querySelectorAll("i[data-w]")) i.style.width = i.dataset.w + "%";     // widths set via CSSOM (the CSP forbids inline style attributes)
 });
@@ -57,6 +63,7 @@ route(/^\/notifications$/, async (view) => {
 });
 export async function refreshBell() {
   try { const n = await api("/api/dms/notifications?unread=1"); const b = document.getElementById("bell-n"); b.textContent = String(n.unread); b.hidden = !n.unread; } catch { /* ignore */ }
+  try { const t = await api("/api/dms/tasks"); setNavBadge("tasks", t.tasks.length); } catch { /* ignore */ }
 }
 
 // ---------------- automation alerts ----------------

@@ -8,33 +8,49 @@
 </head>
 <body>
 <div id="login" class="login" hidden>
-  <div class="card login-card">
-    <h1>ICC JEJU</h1>
-    <p class="hint">제주국제컨벤션센터 문서·AI 플랫폼 <span id="login-ver"></span></p>
-    <div id="login-demo" hidden>
-      <label>데모 사용자 <select id="demo-user"></select></label>
-      <p class="hint">데모 전용 화면입니다. 운영에서는 토큰/SSO 모드를 사용하세요.</p>
+  <section class="login-hero" aria-hidden="true">
+    <div class="logo"><span class="mark" id="hero-mark"></span>ICC JEJU</div>
+    <div>
+      <h2>흩어진 문서를 한곳에,<br>권한 그대로 AI가 찾아 답합니다</h2>
+      <p>제주국제컨벤션센터의 계약·규정·회의록·정산 문서를 안전하게 보관하고, 근거와 함께 질문에 답하는 문서 중앙화 플랫폼입니다.</p>
+      <ul id="hero-points"></ul>
     </div>
-    <div id="login-token" hidden>
-      <label>액세스 토큰 <input id="token" type="password" autocomplete="off" placeholder="edm-ai token -u 사용자 로 발급"></label>
+    <div class="hero-foot" id="hero-foot"></div>
+  </section>
+  <section class="login-side">
+    <div class="card login-card">
+      <h1>로그인</h1>
+      <p class="hint">제주국제컨벤션센터 문서·AI 플랫폼 <span id="login-ver"></span></p>
+      <div id="login-demo" hidden>
+        <label for="demo-user">데모 사용자</label><select id="demo-user"></select>
+        <p class="hint">데모 전용 화면입니다. 운영에서는 토큰/SSO 모드를 사용하세요.</p>
+      </div>
+      <div id="login-token" hidden>
+        <label for="token">액세스 토큰</label><input id="token" type="password" autocomplete="off" placeholder="edm-ai token -u 사용자 로 발급">
+      </div>
+      <p><button id="login-go" class="primary block">시작하기</button></p>
+      <p id="login-err" class="err" role="alert"></p>
     </div>
-    <button id="login-go" class="primary">시작</button>
-    <p id="login-err" class="err" role="alert"></p>
-  </div>
+  </section>
 </div>
 
 <div id="shell" class="shell" hidden>
   <aside class="side" aria-label="주 메뉴">
-    <div class="brand">ICC JEJU<small>문서·AI 플랫폼</small></div>
+    <div class="brand"><span class="mark" id="brand-mark"></span><div>ICC JEJU<small>문서·AI 플랫폼</small></div></div>
     <nav id="nav"></nav>
-    <div class="side-foot"><span id="who"></span><span id="ver" class="hint"></span><button id="logout" class="link">로그아웃</button></div>
+    <div class="side-foot">
+      <div class="me"><span class="avatar" id="avatar"></span><div class="me-t"><b id="who-name"></b><span id="who-sub"></span></div></div>
+      <div class="row"><button id="theme" type="button" aria-label="화면 모드 전환"></button><button id="logout" type="button"></button></div>
+      <span id="ver" class="hint"></span>
+    </div>
   </aside>
   <div class="main-col">
     <header class="top">
       <form id="top-search" role="search" class="top-search">
-        <input id="top-q" type="search" placeholder="문서 검색 (제목 · 문서번호 · 내용 · 태그)" aria-label="문서 검색">
+        <span id="search-ic"></span>
+        <input id="top-q" type="search" placeholder="문서 검색 (제목 · 문서번호 · 내용 · 태그)   /" aria-label="문서 검색">
       </form>
-      <button id="bell" class="bell" aria-label="알림">알림<span id="bell-n" class="count" hidden></span></button>
+      <button id="bell" class="bell ghost" aria-label="알림"><span id="bell-ic"></span><span id="bell-n" class="count" hidden></span></button>
     </header>
     <main id="view" tabindex="-1"></main>
   </div>

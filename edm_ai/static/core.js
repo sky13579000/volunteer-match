@@ -1,3 +1,4 @@
+import { icon } from "./icons.js";
 // Shared UI toolkit. Every piece of server data goes through textContent / DOM nodes, never innerHTML.
 export const state = { cfg: {}, me: null, meta: null };
 
@@ -118,7 +119,8 @@ export function table(headers, rows, { onRow, cls = "" } = {}) {
       cells.map((c, i) => el("td", { class: typeof c === "number" ? "num" : "" }, typeof c === "number" ? fmtNum(c) : c))); }))));
 }
 export const field = (label, input, hint) => el("div", {}, el("label", {}, label), input, hint && el("div", { class: "hint" }, hint));
-export const empty = (msg) => el("p", { class: "hint" }, msg);
+export const empty = (msg, ic = "inbox") => el("div", { class: "empty-state" }, icon(ic, 34), el("span", {}, msg));
+export function setNavBadge(name, n) { const b = document.getElementById("nb-" + name); if (b) { b.textContent = String(n); b.hidden = !n; } }
 
 /** Permission entries editor. entries: [{type: user|dept|role|all|deny, id, role}] */
 export function aclEditor(entries, { allowDeny = true } = {}) {
@@ -141,4 +143,64 @@ export function aclEditor(entries, { allowDeny = true } = {}) {
   const node = el("div", {}, dl, rows, el("button", { type: "button", class: "sm", onclick: () => add() }, "+ 권한 추가"));
   node.get = () => [...rows.children].map((r) => r.get()).filter((e) => e.type === "all" || e.id);
   return node;
+}
+
+// ---------- minimal, safe Markdown -> DOM (headings, lists, checklists, tables, quotes, code, bold/italic/code/links) ----------
+function inline(text) {
+  const out = [];
+  const re = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\))/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m[2]) out.push(el("strong", {}, m[2]));
+    else if (m[3]) out.push(el("em", {}, m[3]));
+    else if (m[4]) out.push(el("code", {}, m[4]));
+    else out.push(el("a", { href: m[6], target: "_blank", rel: "noopener noreferrer" }, m[5]));
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+export function renderMd(src) {
+  const root = el("div", { class: "md" });
+  const lines = String(src || "").replace(/\r\n?/g, "\n").split("\n");
+  let i = 0;
+  const isTableSep = (s) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s || "");
+  const cells = (s) => s.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (!ln.trim()) { i++; continue; }
+    if (/^```/.test(ln)) {
+      const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++; root.append(el("pre", { class: "code" }, buf.join("\n"))); continue;
+    }
+    const h = /^(#{1,4})\s+(.*)$/.exec(ln);
+    if (h) { root.append(el("h" + (h[1].length + 1), {}, inline(h[2]))); i++; continue; }
+    if (/^\s*(---|\*\*\*)\s*$/.test(ln)) { root.append(el("hr")); i++; continue; }
+    if (ln.includes("|") && isTableSep(lines[i + 1])) {
+      const head = cells(ln); i += 2; const rows = [];
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cells(lines[i++]));
+      root.append(el("div", { class: "scroll" }, el("table", { class: "tbl" }, el("thead", {}, el("tr", {}, head.map((c) => el("th", {}, inline(c))))),
+        el("tbody", {}, rows.map((r) => el("tr", {}, head.map((_, k) => el("td", {}, inline(r[k] || ""))))))))); continue;
+    }
+    if (/^>\s?/.test(ln)) {
+      const buf = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ""));
+      root.append(el("blockquote", {}, inline(buf.join(" ")))); continue;
+    }
+    const li = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+    if (li.test(ln)) {
+      const ordered = /\d+\./.test(li.exec(ln)[2]); const items = [];
+      while (i < lines.length && li.test(lines[i])) {
+        const t = li.exec(lines[i++])[3]; const cb = /^\[( |x|X)\]\s+(.*)$/.exec(t);
+        items.push(cb ? el("li", { class: "task" }, el("input", { type: "checkbox", disabled: true, checked: cb[1] !== " " }), " ", inline(cb[2])) : el("li", {}, inline(t)));
+      }
+      root.append(el(ordered ? "ol" : "ul", {}, items)); continue;
+    }
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|>\s?|\s*([-*]|\d+\.)\s+)/.test(lines[i]) && !(lines[i].includes("|") && isTableSep(lines[i + 1]))) buf.push(lines[i++]);
+    root.append(el("p", {}, inline(buf.join("\n"))));
+  }
+  return root;
 }

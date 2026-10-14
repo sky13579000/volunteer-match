@@ -1,4 +1,4 @@
-import { $, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { $, renderMd, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { folderOptions } from "./v-docs.js";
 
 const TABS = [["info", "개요"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["history", "이력"]];
@@ -21,6 +21,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
   if (d.readable !== false) {
     if (can("download")) actions.push(act("다운로드", () => saveBlob(`/api/docs/${id}/download`, {}, d.title)));
     if (can("edit") && d.origin === "managed") {
+      if (/\.(md|txt)$/i.test(d.versions?.[0]?.filename || "")) actions.push(act("온라인 편집", () => go(`#/doc/${id}/edit`)));
       actions.push(act("새 버전 올리기", () => newVersionDialog(d, reload)));
       actions.push(d.locked_by ? (d.locked_by === state.me.id || can("manage") ? act("체크아웃 해제", async () => { await api(`/api/docs/${id}/checkout/cancel`, { method: "POST", body: {} }); toast("해제했습니다"); reload(); }) : pill("잠김: " + d.locked_by, "warn"))
         : act("체크아웃", async () => { await api(`/api/docs/${id}/checkout`, { method: "POST", body: {} }); toast("체크아웃했습니다. 다른 사용자는 새 버전을 올릴 수 없습니다"); reload(); }));
@@ -51,6 +52,19 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     panel);
   panel.append(await body(d, reload));
 });
+
+/** Body preview: Markdown documents are rendered, everything else is plain text. Confidential documents carry a viewer watermark. */
+function bodyView(d) {
+  const cur = d.versions?.find((v) => v.ver === (d.viewing_ver || d.effective_ver)) || d.versions?.[0];
+  const isMd = /\.md$/i.test(cur?.filename || "") || d.origin === "crawled" && /\.md$/i.test(d.source || "");
+  const box = isMd ? el("div", { class: "body-md card md-wrap" }, renderMd(d.text)) : el("pre", { class: "body" }, d.text);
+  if ((d.level || 0) >= 2) {
+    const mark = `${state.me.name} · ${new Date().toISOString().slice(0, 10)}`;
+    box.classList.add("wm-host");
+    box.append(el("div", { class: "wm", "aria-hidden": "true" }, Array.from({ length: 12 }, () => el("span", {}, mark))));
+  }
+  return box;
+}
 
 // ---------- dialogs ----------
 function newVersionDialog(d, reload) {
@@ -117,7 +131,7 @@ function infoTab(d, reload) {
   const rows = d.linked_rows?.length ? el("div", { class: "sec" }, el("h3", {}, "연결된 업무 DB 행"), d.linked_rows.map((r) => el("div", { class: "ev row" }, el("b", {}, `${r.title} · ${r.key}`),
     el("div", { class: "t" }, Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join("\n")), r.masked.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + r.masked.join(", ")) : ""))) : "";
   return el("div", {}, dl, el("div", { class: "row sec" }, lifecycle), a.summary ? el("div", { class: "sec" }, el("h3", {}, `자동 요약 · ${a.category}`), el("p", { class: "flush" }, a.summary)) : "",
-    fields, checks, rows, relatedBlock(d, reload), imagePreview(d), el("div", { class: "sec" }, el("h3", {}, `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? el("pre", { class: "body" }, d.text) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 열람 가능한 버전이 없습니다)")));
+    fields, checks, rows, relatedBlock(d, reload), imagePreview(d), el("div", { class: "sec" }, el("h3", {}, `본문 미리보기${d.viewing_ver ? " (v" + d.viewing_ver + ")" : ""}`), d.text ? bodyView(d) : empty("미리볼 텍스트가 없습니다 (이미지 등 텍스트가 없는 형식이거나 열람 가능한 버전이 없습니다)")));
 }
 const can = (d, p) => (d.perms || []).includes(p);
 

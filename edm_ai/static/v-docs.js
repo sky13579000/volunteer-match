@@ -155,6 +155,7 @@ route(/^\/docs$/, async (view, _m, params) => {
   view.replaceChildren(
     el("div", { class: "page-h" }, el("h1", {}, titleText), el("span", { class: "hint" }, `${fmtNum(res.total)}건`), el("span", { class: "grow" }),
       el("button", { class: "primary", id: "btn-new", onclick: () => registerDialog(cur || 1).catch(fail) }, "+ 새 문서"),
+      el("button", { id: "btn-tpl", onclick: () => go("#/new") }, "양식으로 작성"),
       el("button", { onclick: () => importDialog(cur || 1).catch(fail) }, "ZIP 일괄 등록"),
       el("button", { onclick: () => folderDialog(tree, cur).catch(fail) }, curF ? "폴더 관리" : "새 폴더")),
     el("div", { class: "browser" }, renderTree(tree, cur, (id) => nav({ folder: id || "", favorites: "", mine: "" })),
