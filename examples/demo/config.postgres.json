@@ -182,5 +182,13 @@
       "amount_col": "amount",
       "due_col": "due_date"
     }
+  },
+  "adapters": {
+    "slack": {
+      "signing_secret_env": "EDM_AI_SLACK_SIGNING_SECRET"
+    },
+    "webhook": {
+      "secret_env": "EDM_AI_WEBHOOK_SECRET"
+    }
   }
 }

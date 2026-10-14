@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import auth
+from . import adapters, auth
 from .config import App
 from .edm import EdmError
 
@@ -29,6 +29,15 @@ def make_handler(app: App, demo_login: bool):
         raise SystemExit("token auth needs env EDM_AI_SECRET (>=16 chars)")
     limit = int(app.cfg.get("rate_limit_per_min", 60))
     hits: dict[str, deque] = defaultdict(deque)
+    acfg_ad = app.cfg.get("adapters", {})
+    slack_secret = os.environ.get((acfg_ad.get("slack") or {}).get("signing_secret_env", ""), "") if acfg_ad.get("slack") else ""
+    hook_secret = os.environ.get((acfg_ad.get("webhook") or {}).get("secret_env", ""), "") if acfg_ad.get("webhook") else ""
+    for name, cfg_, sec in (("slack", acfg_ad.get("slack"), slack_secret), ("webhook", acfg_ad.get("webhook"), hook_secret)):
+        if cfg_ and sec and len(sec) < 16:      # unset secret = adapter disabled; a WEAK secret is refused
+            raise SystemExit(f"adapter '{name}': secret must be at least 16 characters")
+        if cfg_ and not sec:
+            log.info("adapter '%s' disabled (secret env var not set)", name)
+    replay = adapters.ReplayGuard()
     lock = app.lock  # DB connections are shared across request threads and the re-indexer
 
     class H(BaseHTTPRequestHandler):
@@ -140,7 +149,53 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(200, {"chain_ok": ok, "first_bad_id": bad, "entries": app.store.audit_log()})
             self._send(404, {"error": "not found"})
 
+        def _adapter(self, path: str):
+            """Slack slash command / signed webhook. Authenticated by signature, never by the user headers."""
+            n = int(self.headers.get("Content-Length", 0))
+            if n > 65536:
+                return self._send(413, {"error": "too large"})
+            raw = self.rfile.read(n)
+            if path == "/api/adapters/slack" and slack_secret:
+                if not adapters.verify_slack(slack_secret, self.headers.get("X-Slack-Request-Timestamp", ""), raw,
+                                             self.headers.get("X-Slack-Signature", "")):
+                    return self._send(401, {"error": "bad signature"})
+                cmd = adapters.parse_slash(raw)
+                uid = app.external.get(("slack", cmd["user_id"]))
+                if not uid:
+                    return self._send(200, {"response_type": "ephemeral", "text": "이 Slack 계정은 EDM-AI 사용자와 연결되어 있지 않습니다. 관리자에게 문의하세요."})
+                if not cmd["text"]:
+                    return self._send(200, {"response_type": "ephemeral", "text": "사용법: /edm 한빛전자 계약 금액은?"})
+                if self._limited(uid):
+                    return self._send(200, {"response_type": "ephemeral", "text": "요청이 너무 많습니다. 잠시 후 다시 시도하세요."})
+                with lock:
+                    ans = app.engine.ask(app.users[uid], cmd["text"][:2000]).to_dict()
+                return self._send(200, {"response_type": "ephemeral", "text": adapters.format_chat(ans)})   # ephemeral: only the asker sees it
+            if path == "/api/adapters/webhook" and hook_secret:
+                ts, sig = self.headers.get("X-EDM-Timestamp", ""), self.headers.get("X-EDM-Signature", "")
+                if not adapters.verify_webhook(hook_secret, ts, raw, sig):
+                    return self._send(401, {"error": "bad signature"})
+                if not replay.fresh(sig):
+                    return self._send(409, {"error": "replayed request"})
+                try:
+                    b = json.loads(raw)
+                    ident, q = b["user"], str(b["question"]).strip()[:2000]
+                    uid = app.external.get((str(ident["type"]), str(ident["id"])))
+                    assert q
+                except Exception:
+                    return self._send(400, {"error": "bad request"})
+                if not uid:
+                    return self._send(403, {"error": "unknown external user"})
+                if self._limited(uid):
+                    return self._send(429, {"error": "rate limited"})
+                with lock:
+                    ans = app.engine.ask(app.users[uid], q).to_dict()
+                ans["text"] = adapters.format_chat(ans)
+                return self._send(200, ans)
+            return self._send(404, {"error": "not found"})
+
         def _post(self):
+            if urlparse(self.path).path.startswith("/api/adapters/"):
+                return self._adapter(urlparse(self.path).path)
             u = self._user()
             if not u:
                 return self._send(401, {"error": "unauthenticated"})

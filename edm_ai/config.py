@@ -43,6 +43,8 @@ class App:
         self.edm = Edm(self)
         users = json.loads(self._p(self.cfg.get("users", "users.json")).read_text("utf-8"))
         self.users = {u["id"]: Principal.from_dict(u) for u in users}
+        # external identities (Slack user id, e-mail ...) -> internal user; the ONLY way an adapter request gets a principal
+        self.external = {(k, str(v)): u["id"] for u in users for k, v in (u.get("external") or {}).items()}
 
     def _p(self, rel: str) -> Path:
         return (self.base / rel).resolve()
