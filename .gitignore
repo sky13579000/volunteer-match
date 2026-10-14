@@ -3,3 +3,4 @@ __pycache__/
 examples/demo/workspace/
 *.db
 .venv/
+examples/demo/docs/uploads/

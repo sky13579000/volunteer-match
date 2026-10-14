@@ -12,6 +12,8 @@
   <span id="who"></span>
   <nav>
     <button id="tab-chat" class="tab on">질의응답</button>
+    <button id="tab-docs" class="tab" hidden>문서</button>
+    <button id="tab-alerts" class="tab" hidden>알림 <span id="alert-count" class="count" hidden></span></button>
     <button id="tab-audit" class="tab" hidden>감사 로그</button>
     <button id="logout" hidden>로그아웃</button>
   </nav>
@@ -37,6 +39,31 @@
     <textarea id="q" rows="2" placeholder="질문을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)" required></textarea>
     <button class="primary" id="send">질문</button>
   </form>
+</main>
+
+<main id="docs" class="wide" hidden>
+  <div class="docs-grid">
+    <section class="docs-side">
+      <form id="doc-search" class="row"><input id="doc-q" type="search" placeholder="문서 검색 (제목·내용)" aria-label="문서 검색"><button class="primary">검색</button></form>
+      <details id="upload-box" class="card">
+        <summary>＋ 문서 올리기</summary>
+        <form id="upload-form" class="stack">
+          <input id="up-file" type="file" required aria-label="파일 선택" accept=".md,.txt,.csv,.eml,.html,.htm,.docx,.xlsx,.pptx,.odt,.ods,.odp,.pdf">
+          <label class="check"><input id="up-default" type="checkbox" checked> 내 부서·보안등급 기본 권한 사용</label>
+          <div id="up-acl" hidden></div>
+          <button class="primary" id="up-go">올리기</button>
+          <p id="up-msg" class="hint" role="status"></p>
+        </form>
+      </details>
+      <ul id="doc-list" class="list"></ul>
+    </section>
+    <section id="doc-detail" class="card" aria-live="polite"><p class="hint">왼쪽에서 문서를 고르세요.</p></section>
+  </div>
+</main>
+
+<main id="alerts" class="wide" hidden>
+  <p class="hint">문서에서 자동 추출한 계약금액·납기를 업무 DB와 대조한 결과입니다. 본인이 읽을 수 있는 문서와 컬럼만 대조합니다.</p>
+  <div id="alert-list" class="stack"></div>
 </main>
 
 <main id="audit" hidden>

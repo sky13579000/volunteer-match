@@ -29,9 +29,8 @@ async function api(path, opts = {}) {
   return data;
 }
 function show(view) {
-  for (const v of ["login", "chat", "audit"]) $(v).hidden = v !== view;
-  $("tab-chat").classList.toggle("on", view === "chat");
-  $("tab-audit").classList.toggle("on", view === "audit");
+  for (const v of ["login", "chat", "docs", "alerts", "audit"]) $(v).hidden = v !== view;
+  for (const t of ["chat", "docs", "alerts", "audit"]) $("tab-" + t).classList.toggle("on", view === t);
 }
 
 async function boot() {
@@ -49,6 +48,9 @@ function enter() {
   $("who").textContent = `${me.name} · ${me.dept || "-"} · 보안등급 ${me.level}`;
   $("logout").hidden = false;
   $("tab-audit").hidden = !me.is_admin;
+  $("tab-docs").hidden = false;
+  $("tab-alerts").hidden = false;
+  refreshAlertCount();
   const ex = $("examples");
   ex.replaceChildren(...cfg.examples.map((t) => el("button", { type: "button", onclick: () => { $("q").value = t; $("q").focus(); } }, t)));
   show("chat");
@@ -61,6 +63,8 @@ $("login-go").addEventListener("click", async () => {
 });
 $("logout").addEventListener("click", () => { store.del("token"); store.del("uid"); location.reload(); });
 $("tab-chat").addEventListener("click", () => show("chat"));
+$("tab-docs").addEventListener("click", () => { show("docs"); loadDocs(); });
+$("tab-alerts").addEventListener("click", () => { show("alerts"); loadAlerts(); });
 $("tab-audit").addEventListener("click", async () => {
   show("audit");
   const d = await api("/api/audit");
@@ -117,4 +121,129 @@ $("form").addEventListener("submit", async (ev) => {
   } finally { $("send").disabled = false; $("q").focus(); }
 });
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); } });
+
+// ===================== documents (EDM) =====================
+const SEV = { high: ["높음", "bad"], medium: ["중간", "warn"] };
+const ACL_FIELDS = [["roles", "역할 (쉼표)"], ["depts", "부서 (쉼표)"], ["users", "사용자 ID (쉼표)"], ["deny_users", "제외 사용자 ID"]];
+let curDoc = null;
+
+function aclForm(prefix, acl) {
+  const box = el("div", { class: "acl-grid" });
+  for (const [k, label] of ACL_FIELDS) {
+    box.append(el("label", {}, label, el("input", { type: "text", id: `${prefix}-${k}`, value: (acl && acl[k] || []).join(", ") })));
+  }
+  box.append(el("label", {}, "보안등급", el("input", { type: "number", min: "0", max: "99", id: `${prefix}-level`, value: String(acl ? acl.level : 0) })));
+  return box;
+}
+function readAcl(prefix) {
+  const list = (k) => $(`${prefix}-${k}`).value.split(",").map((x) => x.trim()).filter(Boolean);
+  return { roles: list("roles"), depts: list("depts"), users: list("users"), deny_users: list("deny_users"), level: Number($(`${prefix}-level`).value || 0) };
+}
+async function loadDocs(q) {
+  const list = await api("/api/docs" + (q ? "?q=" + encodeURIComponent(q) : ""));
+  $("doc-list").replaceChildren(...(list.length ? list.map((d) => el("li", {},
+    el("button", { type: "button", class: "doc-item" + (d.readable ? "" : " dim") + (curDoc === d.id ? " on" : ""), onclick: () => showDoc(d) },
+      el("b", {}, d.title), el("small", {}, d.source),
+      el("small", {}, d.readable ? `청크 ${d.chunks}` + (d.owner ? ` · 소유 ${d.owner}` : "") : "읽기 권한 없음 (관리만 가능)")))) : [el("li", { class: "hint" }, "문서가 없습니다")]));
+}
+async function showDoc(d, note) {
+  curDoc = d.id;
+  const box = $("doc-detail");
+  if (!d.readable) return renderDetail(d, null, note);
+  try { const det = await api("/api/docs/" + d.id); renderDetail(det, det, note); } catch (e) { box.replaceChildren(el("p", { class: "err" }, e.message)); }
+  loadDocs($("doc-q").value.trim());
+}
+function table(headers, rows) {
+  return el("div", { class: "scroll" }, el("table", { class: "tbl" },
+    el("thead", {}, el("tr", {}, ...headers.map((h) => el("th", {}, h)))),
+    el("tbody", {}, ...rows.map((r) => el("tr", {}, ...r.map((c) => el("td", {}, c)))))));
+}
+function sec(title, ...kids) { return el("div", { class: "sec" }, el("h3", {}, title), ...kids); }
+function renderDetail(sum, det, note) {
+  const box = $("doc-detail");
+  const kids = [el("h2", { class: "flush" }, sum.title), el("div", { class: "ref" }, sum.source)];
+  const pills = el("div", { class: "sec" });
+  if (det) pills.append(el("span", { class: "pill" }, det.analysis.category));
+  pills.append(el("span", { class: "pill" }, sum.managed ? "업로드 문서" : "수집 문서"));
+  if (sum.owner) pills.append(el("span", { class: "pill" }, "소유 " + sum.owner));
+  kids.push(pills);
+  if (!det) {
+    kids.push(el("p", { class: "hint" }, "이 문서의 내용을 읽을 권한이 없습니다. 관리자는 권한 변경과 삭제만 할 수 있습니다."));
+  } else {
+    if (det.analysis.summary) kids.push(sec("자동 요약", el("p", { class: "flush" }, det.analysis.summary)));
+    const f = det.analysis.fields;
+    if (Object.keys(f).length) {
+      const dl = el("dl", { class: "dl" });
+      const names = { contract_no: "계약번호", project: "프로젝트", amount: "계약금액", due_date: "납기" };
+      for (const [k, v] of Object.entries(f)) dl.append(el("dt", {}, names[k] || k), el("dd", {}, typeof v === "number" ? v.toLocaleString() + "원" : v));
+      kids.push(sec("자동 추출 항목", dl));
+    }
+    if (det.analysis.checks.length) {
+      kids.push(sec("업무 DB 대조", table(["항목", "문서", "DB", "결과", "DB 행"], det.analysis.checks.map((c) => [c.field,
+        typeof c.doc === "number" ? c.doc.toLocaleString() : c.doc, typeof c.db === "number" ? c.db.toLocaleString() : c.db,
+        el("span", { class: "pill " + (c.status === "ok" ? "ok" : "bad") }, c.status === "ok" ? "일치" : "불일치"), c.row]))));
+    }
+    if (det.linked_rows.length) {
+      kids.push(sec("연결된 업무 DB 행", ...det.linked_rows.map((r) => el("div", { class: "ev row" },
+        el("b", {}, `${r.title} · ${r.key}`),
+        el("div", { class: "t" }, Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join("\n")),
+        r.masked.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + r.masked.join(", ")) : ""))));
+    }
+    kids.push(sec("본문", el("pre", { class: "body" }, det.text)));
+    if (det.history.length) kids.push(sec("이력", table(["시각", "사용자", "작업", "내용"], det.history.map((h) => [h.ts.replace("T", " ").slice(0, 19), h.user, h.action, h.detail]))));
+  }
+  if (sum.can_edit) {
+    const msg = el("p", { class: "hint", role: "status" }, note || "");
+    const editor = el("div", { class: "stack" }, aclForm("ed", sum.acl),
+      el("div", { class: "row" },
+        el("button", { type: "button", class: "primary", onclick: async () => {
+          try { const r = await api("/api/docs/" + sum.id + "/acl", { method: "PUT", body: JSON.stringify({ acl: readAcl("ed") }) });
+            await loadDocs($("doc-q").value.trim());
+            const note = r.note || "권한을 저장했습니다."; if (r.id) showDoc(r, note); else renderDetail(r, null, note);
+          } catch (e) { msg.textContent = "저장 실패: " + e.message; } } }, "권한 저장"),
+        sum.managed ? el("button", { type: "button", class: "btn-danger", onclick: async () => {
+          if (!window.confirmDel) { window.confirmDel = sum.id; msg.textContent = "한 번 더 누르면 삭제합니다."; return; }
+          window.confirmDel = null;
+          try { await api("/api/docs/" + sum.id, { method: "DELETE" }); curDoc = null; $("doc-detail").replaceChildren(el("p", { class: "hint" }, "삭제했습니다.")); loadDocs(); }
+          catch (e) { msg.textContent = "삭제 실패: " + e.message; } } }, "삭제") : ""),
+      msg);
+    kids.push(sec("접근 권한 (소유자·관리자)", editor));
+  }
+  box.replaceChildren(...kids);
+}
+$("doc-search").addEventListener("submit", (e) => { e.preventDefault(); loadDocs($("doc-q").value.trim()); });
+$("up-default").addEventListener("change", () => {
+  const box = $("up-acl"); box.hidden = $("up-default").checked;
+  if (!box.hidden && !box.children.length) box.append(aclForm("up", { roles: [], depts: me.dept ? [me.dept] : [], users: [], deny_users: [], level: me.level }));
+});
+$("upload-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = $("up-file").files[0], msg = $("up-msg");
+  if (!file) return;
+  $("up-go").disabled = true; msg.textContent = "올리는 중...";
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    const body = { filename: file.name, content_b64: btoa(bin) };
+    if (!$("up-default").checked) body.acl = readAcl("up");
+    const d = await api("/api/docs", { method: "POST", body: JSON.stringify(body) });
+    msg.textContent = "올렸습니다: " + d.source; $("upload-form").reset(); $("up-acl").hidden = true;
+    await loadDocs(); showDoc(d); refreshAlertCount();
+  } catch (err) { msg.textContent = "실패: " + err.message; } finally { $("up-go").disabled = false; }
+});
+
+// ===================== alerts (automation) =====================
+async function refreshAlertCount() {
+  try { const a = await api("/api/alerts"); const n = a.reduce((x, d) => x + d.findings.length, 0);
+    $("alert-count").textContent = String(n); $("alert-count").hidden = !n; } catch { /* ignore */ }
+}
+async function loadAlerts() {
+  const list = await api("/api/alerts");
+  $("alert-list").replaceChildren(...(list.length ? list.map((a) => el("div", { class: "card alert-card" + (a.findings.some((f) => f.severity === "high") ? "" : " medium") },
+    el("h4", {}, a.title), el("div", { class: "ref" }, a.source),
+    ...a.findings.map((f) => el("p", {}, el("span", { class: "pill " + SEV[f.severity][1] }, SEV[f.severity][0]), f.message, " ", el("span", { class: "ref" }, f.row))),
+    el("button", { type: "button", onclick: () => { show("docs"); loadDocs().then(() => showDoc({ id: a.doc_id, readable: true, managed: false, can_edit: false, title: a.title, source: a.source })); } }, "문서 열기")))
+    : [el("p", { class: "hint" }, "불일치 항목이 없습니다.")]));
+}
+
 boot();
