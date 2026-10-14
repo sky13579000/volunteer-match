@@ -1,4 +1,4 @@
-import { api, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, go, pill, route, setNavBadge, state, table, toast } from "./core.js";
+import { api, deptName, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, go, pill, route, setNavBadge, state, table, toast } from "./core.js";
 import { icon } from "./icons.js";
 
 const ROLE = { viewer: "열람", editor: "편집" };
@@ -48,9 +48,9 @@ route(/^\/admin\/users$/, async (view) => {
   const u = await api("/api/dms/admin/users");
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "사용자 · 조직"), el("span", { class: "hint" }, `${u.users.length}명 · 원본 ${u.source}`)),
     el("p", { class: "hint" }, u.hint),
-    el("div", { class: "chips" }, u.departments.map((d) => el("span", { class: "chip on" }, `${d.dept} ${d.users}`))),
+    el("div", { class: "chips" }, u.departments.map((d) => el("span", { class: "chip on" }, `${deptName(d.dept)} ${d.users}`))),
     el("div", { class: "card sec" }, table(["ID", "이름", "부서", "역할", "보안등급", "이메일", "외부 연동", "문서", "결재 대기"],
-      u.users.map((x) => [x.id, x.name, x.dept, x.roles.join(", ") || "-", "L" + x.level, x.has_email ? pill("있음", "ok") : pill("없음", "warn"), x.external_ids.join(", ") || "-", x.documents, x.pending_approvals]))));
+      u.users.map((x) => [x.id, x.name, deptName(x.dept), x.roles.join(", ") || "-", "L" + x.level, x.has_email ? pill("있음", "ok") : pill("없음", "warn"), x.external_ids.join(", ") || "-", x.documents, x.pending_approvals]))));
 });
 
 const dur = (s) => (s >= 86400 ? `${Math.floor(s / 86400)}일 ` : "") + `${Math.floor((s % 86400) / 3600)}시간 ${Math.floor((s % 3600) / 60)}분`;

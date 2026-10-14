@@ -244,5 +244,14 @@
         ]
       }
     ]
+  },
+  "departments": {
+    "mice": "MICE유치팀",
+    "finance": "경영지원팀",
+    "hr": "인사팀",
+    "provincial": "도청협력팀",
+    "ops": "시설운영팀",
+    "it": "정보시스템팀",
+    "external": "외부 협력사"
   }
 }

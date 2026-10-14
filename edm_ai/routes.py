@@ -42,7 +42,7 @@ def build_routes(app):
     def _config(req, u, m, qs):
         return {"doc_types": d.list_doc_types(u), "statuses": ["draft", "in_review", "approved", "rejected", "expired"],
                 "share": {"enabled": d.share_cfg["enabled"], "max_days": d.share_cfg["max_days"], "max_level": d.share_cfg["max_level"]},
-                "max_upload_mb": d.max_upload // 1048576, "trash_days": d.trash_days,
+                "departments": app.cfg.get("departments", {}), "max_upload_mb": d.max_upload // 1048576, "trash_days": d.trash_days,
                 "users": [{"id": x.id, "name": x.name, "dept": x.dept} for x in app.users.values()]}
 
     @route("GET", r"/api/dms/dashboard")
@@ -355,6 +355,15 @@ def build_routes(app):
     @route("GET", r"/api/dms/admin/stats")
     def _stats(req, u, m, qs):
         return d.admin_stats(u)
+
+    @route("GET", r"/api/dms/admin/report")
+    def _report(req, u, m, qs):
+        return d.report(u, q1(qs, "days", 90))
+
+    @route("GET", r"/api/dms/admin/report\.csv")
+    def _report_csv(req, u, m, qs):
+        sec = q1(qs, "section", "registrations")
+        return Raw(d.report_csv(u, sec, q1(qs, "days", 90)).encode("utf-8"), f"report-{sec}.csv", "text/csv")
 
     @route("GET", r"/api/dms/admin/users")
     def _admin_users(req, u, m, qs):

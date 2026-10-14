@@ -254,3 +254,12 @@ dialog.palette{width:min(640px,calc(100% - 24px));margin-top:12vh;padding:0;over
 .np-h{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--bd);font-weight:700}.np-l{max-height:60vh;overflow:auto}
 .np-i{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--bd);width:100%;border-radius:0;border-left:0;border-right:0;border-top:0;background:none;box-shadow:none;text-align:left;justify-content:flex-start;align-items:flex-start}.np-i:hover:not(:disabled){background:var(--soft)}
 .np-i.unread{background:var(--ac-soft)}.np-i .t{flex:1;min-width:0;overflow-wrap:anywhere}.np-f{padding:10px 16px;text-align:center}
+/* charts */
+.chart{width:100%;height:auto;display:block}.ch-grid{stroke:var(--bd);stroke-width:1}.ch-ax{fill:var(--mut);font-size:11px}.ch-val{fill:var(--fg);font-size:11px;font-weight:600;text-anchor:middle}
+.ch-bar{fill:var(--ac)}.ch-bar:hover{fill:var(--cit)}.ch-line{stroke:var(--ac);stroke-width:2.4;stroke-linejoin:round}.ch-area{fill:var(--ac);opacity:.12}.ch-dot{fill:var(--card);stroke:var(--ac);stroke-width:2}
+.donut{width:160px;flex:none}.ch-ring-bg{stroke:var(--soft)}.ch-seg{stroke:var(--ac)}.ch-seg.s1,.dot.s1{stroke:var(--cit);background:var(--cit)}.ch-seg.s2,.dot.s2{stroke:#7a3fb0;background:#7a3fb0}.ch-seg.s3,.dot.s3{stroke:var(--ok);background:var(--ok)}.dot.s0{background:var(--ac)}
+.ch-center{fill:var(--fg);font-size:26px;font-weight:700;text-anchor:middle}.donut-row{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.legend{display:flex;flex-direction:column;gap:6px;font-size:.86rem}.legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
+.statrow{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px}.stat{flex:1;min-width:96px;background:var(--soft);border-radius:var(--r1);padding:8px 12px}.stat b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.top-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd)}.top-row:last-child{border-bottom:0}.kpi-h{display:block;margin-top:2px}
+.rep .card{align-self:stretch}@media print{.page-h select,.menu-wrap{display:none !important}.card{break-inside:avoid;box-shadow:none}}
+.page-h select{width:auto}.page-h .menu-wrap{display:inline-block}

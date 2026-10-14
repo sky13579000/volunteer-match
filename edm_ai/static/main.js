@@ -1,10 +1,11 @@
-import { $, api, el, fail, go, parseHash, render, state } from "./core.js";
+import { $, api, deptName, el, fail, go, parseHash, render, state } from "./core.js";
 import "./v-docs.js";
 import "./v-doc.js";
 import "./v-cal.js";
 import "./v-edit.js";
 import "./v-social.js";
 import { openPalette } from "./v-palette.js";
+import "./v-reports.js";
 import { toggleNotifPopover } from "./v-notif.js";
 import { refreshBell } from "./v-misc.js";
 import { icon } from "./icons.js";
@@ -14,7 +15,7 @@ const NAV = [
   ["문서", [["#/docs", "문서함", "folder"], ["#/docs?favorites=1", "즐겨찾기", "star"], ["#/docs?mine=1", "내가 올린 문서", "user"], ["#/trash", "휴지통", "trash"]]],
   ["업무", [["#/tasks", "결재함", "task", "tasks"], ["#/access", "권한 신청", "key", "access"], ["#/notifications", "알림", "bell"], ["#/calendar", "일정 캘린더", "calendar"], ["#/alerts", "문서↔DB 불일치", "alert"]]],
 ];
-const ADMIN = ["관리", [["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
+const ADMIN = ["관리", [["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/reports", "리포트", "chart"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
 
 function buildNav() {
   const groups = state.me.is_admin ? [...NAV, ADMIN] : NAV;
@@ -39,7 +40,7 @@ async function enter() {
   $("#shell").hidden = false;
   $("#ver").textContent = "ICC JEJU 플랫폼 v" + (state.cfg.version || "?");
   $("#who-name").textContent = state.me.name;
-  $("#who-sub").textContent = `${state.me.dept || "-"} · 보안등급 L${state.me.level}${state.me.is_admin ? " · 관리자" : ""}`;
+  $("#who-sub").textContent = `${deptName(state.me.dept)} · 보안등급 L${state.me.level}${state.me.is_admin ? " · 관리자" : ""}`;
   $("#avatar").textContent = (state.me.name || "?").slice(0, 1);
   buildNav();
   refreshBell();
@@ -96,7 +97,7 @@ async function boot() {
   if (state.cfg.auth_mode === "token") $("#login-token").hidden = false;
   else if (state.cfg.demo) {
     $("#login-demo").hidden = false;
-    for (const u of await (await fetch("/api/demo-users")).json()) $("#demo-user").append(el("option", { value: u.id }, `${u.name} (${u.dept} / L${u.level})`));
+    for (const u of await (await fetch("/api/demo-users")).json()) $("#demo-user").append(el("option", { value: u.id }, `${u.name} · ${u.dept_name || u.dept} · L${u.level}`));
   }
   $("#login-go").addEventListener("click", async () => {
     $("#login-err").textContent = "";

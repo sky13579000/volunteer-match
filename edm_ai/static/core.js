@@ -236,3 +236,6 @@ export function menu(label, items, { ic = "chevron", cls = "" } = {}) {
   wrap.append(btn, pop);
   return wrap;
 }
+
+export const deptName = (id) => state.meta?.departments?.[id] || id || "-";
+export const fmtHours = (h) => (h == null ? "-" : h < 1 ? "1시간 미만" : h < 48 ? `${h}시간` : `${Math.round(h / 24)}일`);

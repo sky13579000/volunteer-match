@@ -168,7 +168,7 @@ def make_handler(app: App, demo_login: bool):
                 if path == "/api/demo-users":
                     if not (demo_login and acfg["mode"] == "header"):
                         return self._send(404, {"error": "not found"})
-                    return self._send(200, [{"id": x.id, "name": x.name, "dept": x.dept, "level": x.level} for x in app.users.values()])
+                    return self._send(200, [{"id": x.id, "name": x.name, "dept": x.dept, "dept_name": app.cfg.get("departments", {}).get(x.dept, x.dept), "level": x.level} for x in app.users.values()])
                 if path == "/api/health":
                     return self._send(200, {"ok": True})
             if path.startswith("/api/share/"):
