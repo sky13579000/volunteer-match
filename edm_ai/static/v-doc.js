@@ -61,7 +61,14 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
   const panel = el("div", { role: "tabpanel" });
   const priv = d.privacy?.findings?.length ? el("div", { class: "card privacy-banner sec" }, icon("shield", 20), el("div", {}, el("b", {}, "개인정보가 포함된 것으로 검출되었습니다"),
     el("div", { class: "chips" }, d.privacy.findings.map((f) => pill(`${f.label} ${f.count}건`, f.severity === "high" ? "bad" : f.severity === "medium" ? "warn" : ""))),
-    el("div", { class: "hint" }, `v${d.privacy.ver} 기준 · 값은 저장하지 않고 건수만 기록합니다. 불필요하면 삭제하거나 가린 새 버전을 올리고, 필요하면 보안등급·다운로드 제한을 지정하세요.`))) : "";
+    el("div", { class: "hint" }, `v${d.privacy.ver} 기준 · 값은 저장하지 않고 건수만 기록합니다. 불필요하면 삭제하거나 가린 새 버전을 올리고, 필요하면 보안등급·다운로드 제한을 지정하세요.`),
+    el("button", { class: "sm", id: "unmask-btn", onclick: async () => {
+      const why = el("input", { id: "unmask-why", placeholder: "원문을 확인해야 하는 사유 (5자 이상, 기록됨)" });
+      let r = null;
+      const ok = await dialog("원문 보기", () => el("div", {}, el("p", { class: "hint" }, "개인정보가 가려지지 않은 원문을 봅니다. 사유와 열람자가 기록되고 문서 소유자에게 알림이 갑니다."), field("사유", why)),
+        [{ label: "취소", value: false }, { label: "원문 보기", primary: true, run: async () => { r = await api(`/api/docs/${d.id}/unmask`, { method: "POST", body: { reason: why.value } }); } }]);
+      if (ok && r) await dialog("원문 (열람이 기록되었습니다)", () => el("pre", { class: "body", id: "unmask-text" }, r.text));
+    } }, icon("eye", 14), "원문 보기 (사유 필수)"))) : "";
   view.replaceChildren(head, priv,
     alerts.length ? el("div", { class: "card sec" }, el("b", { class: "bad" }, `업무 DB와 불일치 ${alerts.length}건`), alerts.map((f) => el("p", { class: "flush" }, pill(f.severity === "high" ? "높음" : "중간", f.severity === "high" ? "bad" : "warn"), " " + f.message))) : "",
     el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share"))

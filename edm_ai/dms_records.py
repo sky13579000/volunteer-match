@@ -93,9 +93,12 @@ class RecordsMixin:
             found = {x["kind"]: x["n"] for x in self.q("SELECT kind,n FROM dlp_findings WHERE doc_id=? AND ver=(SELECT MAX(ver) FROM dlp_findings WHERE doc_id=?)", (r["doc_id"], r["doc_id"]))}
             out.append({"doc_id": row["id"], "doc_no": row["doc_no"], "title": row["title"] if self.can_read(p, row) else None, "origin": row["origin"], "level": row["level"],
                         "owner": row["owner"], "folder": self.folder_path(row["folder_id"]) if row["folder_id"] else "", "findings": dlp.describe(found),
-                        "high": any(dlp.SEVERITY[k] == "high" for k in found)})
+                        "high": any(dlp.SEVERITY[k] == "high" for k in found), "retention_until": row["retention_until"], "legal_hold": bool(row["legal_hold"]),
+                        "anonymized": bool((row["props"] or {}).get("anonymized")),
+                        "due": ("overdue" if row["retention_until"] and row["retention_until"] <= today() else "soon" if row["retention_until"] and row["retention_until"] <= (datetime.now(timezone.utc) + timedelta(days=60)).date().isoformat() else None)})
         total = Counter_kinds(out)
-        return {"items": out, "totals": total, "mode": self._dlp_cfg()["mode"], "documents": len(out)}
+        return {"items": out, "totals": total, "mode": self._dlp_cfg()["mode"], "documents": len(out),
+                "overdue": sum(1 for o in out if o["due"] == "overdue" and not o["legal_hold"]), "soon": sum(1 for o in out if o["due"] == "soon")}
 
     def privacy_scan_all(self, p) -> dict:
         """Re-scan every document (managed: newest version; collected folders: indexed text). Nothing is changed except the findings table."""
@@ -210,8 +213,10 @@ class RecordsMixin:
         keys = ("title", "description", "tags", "props", "class_code", "current_ver", "effective_ver", "level", "entries", "retention_until", "status", "folder_id", "owner")
         return hashlib.sha256(json.dumps([row.get(k) for k in keys], sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:24]
 
-    def request_disposal(self, p, ids, reason: str) -> dict:
+    def request_disposal(self, p, ids, reason: str, method: str = "delete") -> dict:
         self._records(p)
+        if method not in ("delete", "anonymize"):
+            raise DmsError(400, "폐기 방식은 delete(영구 삭제) 또는 anonymize(비식별화) 입니다")
         reason = str(reason or "").strip()[:500]
         if not reason:
             raise DmsError(400, "폐기 사유를 입력하세요")
@@ -222,7 +227,11 @@ class RecordsMixin:
         bad = [i for i in ids if i not in ok]
         if bad:
             raise DmsError(409, f"폐기 대상이 아닌 문서가 포함되어 있습니다 (보존기간 미경과·법적 보류·결재 중·이미 신청됨): {len(bad)}건")
-        cur = self.x("INSERT INTO disposals(status,reason,requested_by,requested_at) VALUES('pending',?,?,?)", (reason, p.id, now()))
+        if method == "anonymize":
+            bad = [i for i in ids if not (self.row(i) or {}).get("current_ver") or (self.row(i)["props"] or {}).get("anonymized")]
+            if bad:
+                raise DmsError(409, f"비식별화할 수 없는 문서가 포함되어 있습니다 (본문 없음 또는 이미 비식별화): {len(bad)}건")
+        cur = self.x("INSERT INTO disposals(status,reason,requested_by,requested_at,method) VALUES('pending',?,?,?,?)", (reason, p.id, now(), method))
         did = cur.lastrowid
         for i in ids:
             c = ok[i]
@@ -231,7 +240,7 @@ class RecordsMixin:
         self.store.log_audit(p.id, f"[폐기 심의 신청] #{did} {len(ids)}건", [], False, "dms")
         for uid, u in self.app.users.items():
             if self.admin(u) and uid != p.id:
-                self.notify(uid, "disposal_request", None, f"폐기 심의 신청 #{did}: {len(ids)}건 ({p.name})")
+                self.notify(uid, "disposal_request", None, f"{'비식별화' if method == 'anonymize' else '폐기'} 심의 신청 #{did}: {len(ids)}건 ({p.name})")
         return {"id": did, "items": len(ids)}
 
     def list_disposals(self, p) -> list[dict]:
@@ -269,16 +278,22 @@ class RecordsMixin:
                 why = "법적 보류 또는 보존기간 연장"
             elif self._wf(row["id"]):
                 why = "결재 진행 중"
+            elif (d.get("method") or "delete") == "anonymize" and (not row["current_ver"] or (row["props"] or {}).get("anonymized")):
+                why = "비식별화할 본문이 없거나 이미 비식별화됨"
             if why:
                 self.x("UPDATE disposal_items SET result=? WHERE id=?", ("제외: " + why, it["id"]))
                 skipped += 1
                 continue
             last = self.q1("SELECT sha256, COUNT(*) AS n FROM dms_versions WHERE doc_id=?", (row["id"],)) or {}
             sha = (self.q1("SELECT sha256 FROM dms_versions WHERE doc_id=? ORDER BY ver DESC LIMIT 1", (row["id"],)) or {}).get("sha256")
-            self.x("INSERT INTO disposal_ledger(disposal_id,doc_no,title,class_code,folder,owner,retention_until,versions,sha256,disposed_at,requested_by,approved_by,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                   (d["id"], it["doc_no"], it["title"], it["class_code"], it["folder"], it["owner"], it["retention_until"], last.get("n", 0), sha, now(), d["requested_by"], p.id, d["reason"]))
-            self._purge_row(row, p.id)
-            self.x("UPDATE disposal_items SET result='폐기 완료' WHERE id=?", (it["id"],))
+            method = d.get("method") or "delete"
+            if method == "anonymize":
+                sha = self._anonymize_doc(row, p.id)
+            self.x("INSERT INTO disposal_ledger(disposal_id,doc_no,title,class_code,folder,owner,retention_until,versions,sha256,disposed_at,requested_by,approved_by,reason,method) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (d["id"], it["doc_no"], it["title"], it["class_code"], it["folder"], it["owner"], it["retention_until"], last.get("n", 0), sha, now(), d["requested_by"], p.id, d["reason"], method))
+            if method == "delete":
+                self._purge_row(row, p.id)
+            self.x("UPDATE disposal_items SET result=? WHERE id=?", ("비식별화 완료" if method == "anonymize" else "폐기 완료", it["id"]))
             done += 1
         self.x("UPDATE disposals SET status='approved', decided_by=?, decided_at=?, note=? WHERE id=?", (p.id, now(), note, d["id"]))
         self.notify(d["requested_by"], "disposal_result", None, f"폐기 심의 #{d['id']} 승인: {done}건 폐기, {skipped}건 제외")
@@ -293,10 +308,10 @@ class RecordsMixin:
     def disposal_ledger_csv(self, p) -> str:
         out = io.StringIO()
         w = csv.writer(out)
-        w.writerow(["폐기번호", "문서번호", "제목", "분류", "폴더", "소유자", "보존만료일", "버전수", "최종 SHA-256", "폐기일시", "신청자", "승인자", "사유"])
+        w.writerow(["폐기번호", "문서번호", "제목", "분류", "폴더", "소유자", "보존만료일", "버전수", "최종 SHA-256", "폐기일시", "신청자", "승인자", "사유", "방식"])
         for r in self.disposal_ledger(p):
             w.writerow([str(c).lstrip("=+-@") if isinstance(c, str) else c for c in (r["disposal_id"], r["doc_no"], r["title"], r["class_code"] or "", r["folder"], r["owner"], r["retention_until"],
-                                                                                     r["versions"], r["sha256"] or "", r["disposed_at"], r["requested_by"], r["approved_by"], r["reason"])])
+                                                                                     r["versions"], r["sha256"] or "", r["disposed_at"], r["requested_by"], r["approved_by"], r["reason"], "비식별화" if r.get("method") == "anonymize" else "영구 삭제")])
         return "﻿" + out.getvalue()
 
 

@@ -79,7 +79,12 @@ class LifecycleMixin:
                 self.db.execute("DELETE FROM wf_steps WHERE wf_id=?", (w[0],))
             self.db.execute("DELETE FROM workflows WHERE doc_id=?", (did,))
             self.db.execute("DELETE FROM dms_docs WHERE id=?", (did,))
+        if (self.app.cfg.get("disposal") or {}).get("secure_wipe", True):
+            from .dms_privacy import wipe_tree
+            wipe_tree(self.repo / str(did))
         shutil.rmtree(self.repo / str(did), ignore_errors=True)
+        self.db.execute("DELETE FROM dlp_findings WHERE doc_id=?", (did,))
+        self.db.commit()
         self.store.forget(row["source"])
         self.store.log_audit(by, f"[영구 삭제] {row['doc_no']}", [row["source"]], False, "dms")
 
@@ -121,6 +126,7 @@ class LifecycleMixin:
                 if not self._delete_blockers(row):
                     self._purge_row(row, "system")
                     res["purged"] += 1
+        res["privacy_due"] = self.privacy_maintenance()
         return res
 
     def extend_expiry(self, p, doc_id, new_date) -> dict:

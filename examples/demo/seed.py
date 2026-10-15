@@ -16,6 +16,11 @@ def seed(app):
                                           ("03-01", "시설 점검·유지보수", "03", 5), ("03-02", "안전·재난 대응", "03", 10), ("04", "재무·회계", "", 0), ("04-01", "예산·결산", "04", 10),
                                           ("04-02", "지출·정산 증빙", "04", 5), ("05", "인사·총무", "", 0), ("05-01", "인사 기록", "05", 99), ("05-02", "근태·복무", "05", 3), ("06", "정보공개·민원", "", 3)]:
             d.save_classification(U["admin"], {"code": code, "name": name, "parent": parent, "retention_years": years})
+        # ---- 개인정보파일 대장 ----
+        d.pii_registry_save(U["admin"], {"name": "행사 참가자 등록 명단", "purpose": "행사 운영·출입 관리", "legal_basis": "정보주체 동의", "items": "성명, 소속, 연락처, 이메일", "subjects": "행사 참가자",
+                                         "retention": "행사 종료 후 1년", "destroy_by": day(20), "third_party": "없음", "outsourced": "등록 대행사(계약 CT-2026)", "manager": "MICE유치팀 김지원", "location": "MICE유치팀 문서함"})
+        d.pii_registry_save(U["admin"], {"name": "임직원 인사 정보", "purpose": "인사·급여 관리", "legal_basis": "근로기준법", "items": "성명, 주민등록번호, 계좌", "subjects": "임직원", "retention": "퇴직 후 3년",
+                                         "destroy_by": day(400), "third_party": "4대 보험 기관", "manager": "경영지원팀", "location": "인사팀 문서함(보안등급 3)"})
         # ---- 공용 규정: everybody may read; admin owns ----
         sec = d.register(U["admin"], "정보보안규정.md", md("사내 정보보안 규정", "## 목적", "임직원은 업무상 취득한 고객 정보와 문서를 외부에 유출하지 않는다. 비밀번호는 90일마다 변경한다.",
                          "## 문서 반출", "보안등급 2 이상 문서는 승인 없이 사외로 반출할 수 없으며 외부 공유 링크는 유효기간을 7일 이내로 한다."),

@@ -398,12 +398,40 @@ def build_routes(app):
     @route("POST", r"/api/dms/disposal")
     def _disp_new(req, u, m, qs):
         b = req.body(65536)
-        return d.request_disposal(u, b.get("ids"), b.get("reason"))
+        return d.request_disposal(u, b.get("ids"), b.get("reason"), b.get("method", "delete"))
 
     @route("POST", r"/api/dms/disposal/(\d+)/decide")
     def _disp_decide(req, u, m, qs):
         b = req.body(8192)
         return d.decide_disposal(u, i(m), bool(b.get("approve")), b.get("note", ""))
+
+    @route("GET", r"/api/dms/disposal/(\d+)/certificate")
+    def _disp_cert(req, u, m, qs):
+        return d.disposal_certificate(u, i(m))
+
+    @route("GET", r"/api/dms/records/registry")
+    def _pii_reg(req, u, m, qs):
+        return d.pii_registry(u)
+
+    @route("PUT", r"/api/dms/records/registry")
+    def _pii_reg_save(req, u, m, qs):
+        return d.pii_registry_save(u, req.body(16384))
+
+    @route("DELETE", r"/api/dms/records/registry/(\d+)")
+    def _pii_reg_del(req, u, m, qs):
+        return d.pii_registry_delete(u, i(m))
+
+    @route("GET", r"/api/dms/records/registry\.csv")
+    def _pii_reg_csv(req, u, m, qs):
+        return Raw(d.pii_registry_csv(u).encode("utf-8"), "pii-registry.csv", "text/csv")
+
+    @route("POST", r"/api/docs/(\d+)/unmask")
+    def _unmask(req, u, m, qs):
+        return d.unmask(u, i(m), req.body(4096).get("reason"))
+
+    @route("GET", r"/api/dms/records/unmask-log")
+    def _unmask_log(req, u, m, qs):
+        return {"items": d.unmask_log(u)}
 
     @route("GET", r"/api/dms/disposal/ledger")
     def _ledger(req, u, m, qs):

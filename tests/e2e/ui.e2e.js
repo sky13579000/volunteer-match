@@ -299,6 +299,17 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.hash('#/records?tab=privacy'); await ad2.waitForSelector('.tbl');
   ok('privacy overview shows the finding without a readable title for the administrator', (await ad2.textContent('#view')).includes('주민등록번호'));
 
+  await ad2.hash('#/records?tab=disposal'); await ad2.waitForSelector('button:has-text("파기확인서")');
+  await ad2.locator('button:has-text("파기확인서")').first().click(); await ad2.waitForSelector('.cert');
+  ok('destruction certificate shows a verification hash', (await ad2.textContent('.cert')).includes('검증 해시') && (await ad2.textContent('.cert')).includes('2019 소규모 세미나'));
+  await ad2.dlg().getByRole('button', { name: '닫기' }).click();
+  await ad2.hash('#/records?tab=registry'); await ad2.waitForSelector('.tbl');
+  ok('personal-data register lists entries with a due date', (await ad2.textContent('#view')).includes('행사 참가자 등록 명단') && (await ad2.textContent('#view')).includes('임직원 인사 정보'));
+  await ad2.click('#reg-new'); await ad2.locator('dialog input[aria-label=name]').fill('e2e 대장'); await ad2.locator('dialog input[aria-label=purpose]').fill('시험'); await ad2.dlg().getByRole('button', { name: '저장' }).click(); await ad2.waitForTimeout(700);
+  ok('register entry can be added', (await ad2.textContent('#view')).includes('e2e 대장'));
+  await ad2.hash('#/records?tab=unmask'); await ad2.waitForSelector('#view .card');
+  ok('unmask log tab renders', (await ad2.textContent('#view')).includes('원문 보기'));
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');
