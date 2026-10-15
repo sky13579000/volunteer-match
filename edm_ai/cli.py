@@ -65,10 +65,21 @@ def run_demo(args):
     try:
         runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")      # ERP db + document ingest
     except PermissionError as e:
-        sys.exit(f"\n데모 파일이 다른 프로세스(이전에 띄운 EDM-AI 서버)에서 사용 중입니다: {e.filename}\n"
-                 "그 서버 창을 Ctrl+C 로 끄거나, start-server.bat 를 실행하면 이전 서버를 자동 종료합니다.")
+        # An older server still holds the data files (Windows locks them). Don't make the user hunt for it: run from a fresh copy.
+        import shutil
+        import time
+        fresh = Path.home() / ".edm-ai" / f"demo-{int(time.time())}"
+        shutil.copytree(demo, fresh, ignore=shutil.ignore_patterns("workspace", "backups", "__pycache__"))
+        print(f"\n  ! 이전에 켜 둔 서버가 {Path(e.filename).name} 를 사용 중이라, 새 작업 폴더에서 시작합니다: {fresh}\n"
+              "  ! 옛 서버(옛 화면)는 계속 떠 있으니, 아래에 표시되는 새 주소만 쓰세요.\n")
+        demo = fresh
+        runpy.run_path(str(demo / "build_demo.py"), run_name="__main__")
     url = f"http://{probe_host}:{port}/"
     lan = ""
+    if args.lan and sys.platform == "win32":                 # opens the port for other PCs when run as administrator; harmless otherwise
+        import subprocess
+        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name=EDM-AI-{port}", "dir=in", "action=allow", "protocol=TCP", f"localport={port}"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     if args.lan:
         lan = (f"\n  ! 같은 네트워크의 다른 PC 에서는  http://{_lan_ip()}:{port}/  로 접속합니다 (방화벽에서 {port} 허용 필요).\n"
                "  ! 데모는 로그인 비밀번호가 없습니다 - 신뢰할 수 있는 내부망에서만 쓰세요. 실제 운영은 docs/OPERATIONS.md 의 인증 설정을 따르세요.\n")
