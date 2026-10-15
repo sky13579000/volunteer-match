@@ -3,7 +3,7 @@ import { icon } from "./icons.js";
 import { refreshBell } from "./v-misc.js";
 
 const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""],
-  follow_update: ["구독", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"] };
+  follow_update: ["구독", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"], cc_notice: ["참조", ""] };
 
 let pop = null;
 const close = () => { pop?.remove(); pop = null; document.removeEventListener("click", outside, true); document.removeEventListener("keydown", onKey, true); };

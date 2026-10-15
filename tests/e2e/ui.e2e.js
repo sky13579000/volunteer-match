@@ -323,6 +323,11 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   ok('natural-language search shows the understood conditions', (await kim.textContent('#nl-out')).includes('내가 올린 문서') && (await kim.textContent('#nl-out')).includes('유형'));
   await kim.keyboard.press('Escape');
 
+  await kim.hash('#/tasks'); await kim.waitForSelector('#ab-set');
+  await kim.click('#ab-set'); await kim.waitForSelector('#ab-dep');
+  ok('absence dialog lists deputies', (await kim.locator('#ab-dep option').count()) > 1);
+  await kim.keyboard.press('Escape');
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');

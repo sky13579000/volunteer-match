@@ -140,6 +140,37 @@ def build_routes(app):
                         date_from=g("from"), date_to=g("to"), mine=g("mine") == "1", favorites=g("favorites") == "1", sort=g("sort"),
                         page=g("page") or 1, size=g("size") or 30)
 
+    @route("GET", r"/api/docs\.csv")
+    def _docs_csv(req, u, m, qs):
+        g = lambda k: q1(qs, k)  # noqa: E731
+        return Raw(d.docs_csv(u, q=g("q"), type=g("type"), status=g("status"), tag=g("tag"), folder=g("folder"), owner=g("owner"), origin=g("origin"),
+                              date_from=g("from"), date_to=g("to"), mine=g("mine") == "1", favorites=g("favorites") == "1", sort=g("sort")).encode("utf-8"), "documents.csv", "text/csv")
+
+    @route("GET", r"/api/dms/approval-templates")
+    def _tpl_list(req, u, m, qs):
+        return {"items": d.approval_templates(u)}
+
+    @route("PUT", r"/api/dms/approval-templates")
+    def _tpl_save(req, u, m, qs):
+        return d.save_approval_template(u, req.body(8192))
+
+    @route("DELETE", r"/api/dms/approval-templates/(\d+)")
+    def _tpl_del(req, u, m, qs):
+        return d.delete_approval_template(u, i(m))
+
+    @route("GET", r"/api/dms/absence")
+    def _abs_get(req, u, m, qs):
+        return {"absence": d.my_absence(u)}
+
+    @route("PUT", r"/api/dms/absence")
+    def _abs_set(req, u, m, qs):
+        b = req.body(2048)
+        return d.set_absence(u, b.get("deputy"), b.get("from"), b.get("to"), b.get("reason", ""))
+
+    @route("DELETE", r"/api/dms/absence")
+    def _abs_del(req, u, m, qs):
+        return d.clear_absence(u)
+
     @route("POST", r"/api/docs")
     def _register(req, u, m, qs):
         b = req.body(big())
@@ -205,7 +236,7 @@ def build_routes(app):
     @route("POST", r"/api/docs/(\d+)/submit")
     def _submit(req, u, m, qs):
         b = req.body(8192)
-        return d.submit(u, i(m), b.get("approvers"), b.get("mode", "sequential"), b.get("note", ""))
+        return d.submit(u, i(m), b.get("approvers"), b.get("mode", "sequential"), b.get("note", ""), b.get("cc"))
 
     @route("POST", r"/api/docs/(\d+)/approve")
     def _approve(req, u, m, qs):

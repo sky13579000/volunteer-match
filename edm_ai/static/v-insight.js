@@ -1,4 +1,4 @@
-import { api, dialog, el, empty, fail, fileToB64, fmtDate, fmtDay, go, pill, route, table, toast, userName } from "./core.js";
+import { api, dialog, field, state, el, empty, fail, fileToB64, fmtDate, fmtDay, go, pill, route, table, toast, userName } from "./core.js";
 import { icon } from "./icons.js";
 
 // ---------- natural-language search ----------
@@ -65,3 +65,20 @@ route(/^\/admin\/trust$/, async (view) => {
     el("div", { class: "card" }, el("h3", {}, icon("search", 15), "지식 공백 — 답하지 못한 질문"),
       g.gaps.length ? table(["질문", "횟수"], g.gaps.map((x) => [x.question, x.count])) : empty("최근 답하지 못한 질문이 없습니다", "check"), el("p", { class: "hint" }, `최근 ${g.days}일 질문 ${g.questions}건 중 ${g.unanswered}건. ${g.note}`)));
 });
+
+// ---------- per-type custom fields ----------
+export function customFields(typeCode, props = {}) {
+  const box = el("div", { class: "grid2", id: "custom-fields" });
+  const inputs = {};
+  const fields = (state.meta.doc_types.find((t) => t.code === typeCode)?.fields) || [];
+  for (const f of fields) {
+    const v = props[f.key] ?? "";
+    const input = f.type === "select" ? el("select", { id: "cf-" + f.key }, [el("option", { value: "" }, "(선택)"), ...f.options.map((o) => el("option", { value: o, selected: o === v }, o))])
+      : el("input", { id: "cf-" + f.key, type: f.type === "date" ? "date" : "text", inputmode: f.type === "number" ? "decimal" : undefined, value: v });
+    inputs[f.key] = input;
+    box.append(field(f.label + (f.required ? " *" : ""), input));
+  }
+  box.get = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.value.trim()]).filter(([, v]) => v !== ""));
+  box.keys = fields.map((f) => f.key);
+  return box;
+}

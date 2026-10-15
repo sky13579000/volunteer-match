@@ -1,6 +1,6 @@
 import { $, STATUS, api, aclEditor, avatar, confirmDialog, dialog, el, empty, fail, field, fileTile, fileToB64, fmtDate, fmtDay, fmtNum, go, menu, pill, relTime, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { icon } from "./icons.js";
-import { draftDialog, nlDialog } from "./v-insight.js";
+import { customFields, draftDialog, nlDialog } from "./v-insight.js";
 
 // ---------------- helpers ----------------
 export function folderOptions(tree, { registerable = false } = {}) {
@@ -28,7 +28,9 @@ export async function registerDialog(defaultFolder = 1) {
   const type = typeSelect();
   const typeHint = el("div", { class: "hint" });
   const showHint = () => { const t = state.meta.doc_types.find((x) => x.code === type.value); typeHint.textContent = t ? `번호 ${t.pattern} · 보존 ${t.retention_years || 0}년 · ${t.approval_required ? "결재 후 게시" : "등록 즉시 게시"}` : ""; };
-  type.addEventListener("change", showHint); showHint();
+  let cf = customFields(type.value);
+  const cfHost = el("div", {}, cf);
+  type.addEventListener("change", () => { showHint(); cf = customFields(type.value); cfHost.replaceChildren(cf); }); showHint();
   const folder = el("select", { id: "f-folder", "aria-label": "폴더" }, opts.map((o) => el("option", { value: o.id, selected: o.id === Number(defaultFolder) }, o.label)));
   const tags = el("input", { id: "f-tags", placeholder: "쉼표로 구분 (예: 계약, 2026)" });
   const desc = el("textarea", { id: "f-desc", maxlength: "2000" });
@@ -40,7 +42,7 @@ export async function registerDialog(defaultFolder = 1) {
   editor.hidden = true;
   custom.addEventListener("change", () => (editor.hidden = false)); inherit.addEventListener("change", () => (editor.hidden = true));
   return dialog("새 문서 등록", () => el("div", {},
-    field("파일", file), field("제목", title), el("div", { class: "grid2" }, field("문서유형", type), field("폴더", folder)), typeHint,
+    field("파일", file), field("제목", title), el("div", { class: "grid2" }, field("문서유형", type), field("폴더", folder)), typeHint, cfHost,
     el("div", { class: "grid2" }, field("태그", tags), field("보안등급 (본인 L" + state.me.level + " 이하)", level)),
     field("기록물 분류 (선택)", cls), field("만료일 (선택)", exp), field("설명", desc),
     el("label", {}, "접근 권한"),
@@ -50,7 +52,7 @@ export async function registerDialog(defaultFolder = 1) {
     if (!file.files[0]) throw new Error("파일을 선택하세요");
     const body = { filename: file.files[0].name, content_b64: await fileToB64(file.files[0]), folder_id: Number(folder.value), doc_type: type.value,
       title: title.value.trim() || undefined, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value,
-      level: Number(level.value || 0), expires_at: exp.value || undefined, class_code: cls.value || undefined };
+      level: Number(level.value || 0), expires_at: exp.value || undefined, class_code: cls.value || undefined, props: cf.get() };
     if (custom.checked) body.entries = editor.get();
     const d = await api("/api/docs", { method: "POST", body });
     toast(`등록했습니다: ${d.doc_no}` + (d.status === "draft" ? " (결재 요청이 필요합니다)" : ""));
@@ -170,7 +172,7 @@ route(/^\/docs$/, async (view, _m, params) => {
   view.replaceChildren(
     el("div", { class: "page-h" }, el("h1", {}, titleText), el("span", { class: "count-pill" }, `${fmtNum(res.total)}건`), el("span", { class: "grow" }),
       el("button", { id: "btn-tpl", onclick: () => go("#/new") }, icon("file", 16), "양식으로 작성"),
-      menu("더 보기", [{ label: "자연어로 찾기", icon: "search", run: () => nlDialog() }, { label: "근거 기반 초안", icon: "sparkles", run: () => draftDialog(cur) }, { label: "ZIP 일괄 등록", icon: "upload", run: () => importDialog(cur || 1) }, { label: curF ? "폴더 관리" : "새 폴더", icon: "folder", run: () => folderDialog(tree, cur) }]),
+      menu("더 보기", [{ label: "목록 CSV 내보내기", icon: "download", run: () => saveBlob("/api/docs.csv" + location.hash.replace(/^#\/docs/, "").replace(/^\?/, "?"), {}, "documents.csv") }, { label: "자연어로 찾기", icon: "search", run: () => nlDialog() }, { label: "근거 기반 초안", icon: "sparkles", run: () => draftDialog(cur) }, { label: "ZIP 일괄 등록", icon: "upload", run: () => importDialog(cur || 1) }, { label: curF ? "폴더 관리" : "새 폴더", icon: "folder", run: () => folderDialog(tree, cur) }]),
       el("button", { class: "primary", id: "btn-new", onclick: () => registerDialog(cur || 1).catch(fail) }, icon("plus", 16), "새 문서")),
     el("div", { class: "browser" }, renderTree(tree, cur, (id) => nav({ folder: id || "", favorites: "", mine: "" })),
       el("div", { class: "stack" },

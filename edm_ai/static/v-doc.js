@@ -2,7 +2,7 @@ import { $, renderMd, avatar, fileTile, menu, relTime, aclEditor, api, confirmDi
 import { folderOptions } from "./v-docs.js";
 import { requestDialog } from "./v-social.js";
 import { icon } from "./icons.js";
-import { insightTab } from "./v-insight.js";
+import { customFields, insightTab } from "./v-insight.js";
 
 const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["activity", "열람 현황"], ["insight", "조항 점검"], ["history", "이력"]];
 const ACTION = { registered: "등록", new_version: "새 버전", restored: "버전 복원", submitted: "결재 요청", approved_step: "결재 승인", rejected: "반려", delegated: "결재 위임",
@@ -119,19 +119,32 @@ function newVersionDialog(d, reload) {
     await api(`/api/docs/${d.id}/versions`, { method: "POST", body: { filename: f.files[0].name, content_b64: await fileToB64(f.files[0]), comment: c.value } });
     toast("새 버전을 올렸습니다"); reload(); } }]);
 }
-function submitDialog(d, reload) {
+async function submitDialog(d, reload) {
   const type = state.meta.doc_types.find((t) => t.code === d.doc_type);
-  const checks = state.meta.users.filter((u) => u.id !== state.me.id && u.id !== d.owner).map((u) => {
+  const tpls = (await api("/api/dms/approval-templates")).items;
+  const users = state.meta.users.filter((u) => u.id !== state.me.id && u.id !== d.owner);
+  const checks = users.map((u) => {
     const cb = el("input", { type: "checkbox", value: u.id, checked: (type?.default_approvers || []).includes(u.id), id: "ap-" + u.id });
     return el("label", { class: "inline" }, cb, `${u.name} (${u.dept || u.id})`);
   });
-  const mode = el("select", {}, [["sequential", "순차 (위에서부터 한 명씩)"], ["parallel", "병렬 (모두 동시에, 전원 승인)"]].map(([v, l]) => el("option", { value: v }, l)));
+  const ccChecks = state.meta.users.filter((u) => u.id !== state.me.id).map((u) => el("label", { class: "inline" }, el("input", { type: "checkbox", value: u.id, id: "cc-" + u.id }), `${u.name} (${u.dept || u.id})`));
+  const mode = el("select", { id: "ap-mode" }, [["sequential", "순차 (위에서부터 한 명씩)"], ["parallel", "병렬 (모두 동시에, 전원 승인)"]].map(([v, l]) => el("option", { value: v }, l)));
   const note = el("input", { placeholder: "결재 요청 메모 (선택)" });
-  return dialog("결재 요청", () => el("div", {}, el("p", { class: "hint" }, "선택한 순서대로 결재합니다. 체크한 순서는 목록 순서입니다. 승인되면 현행 버전으로 게시되고 AI 답변·검색에 반영됩니다."), el("label", {}, "결재자"), checks, field("방식", mode), field("메모", note)),
+  const tpl = el("select", { id: "ap-tpl", "aria-label": "저장된 결재선", onchange: () => {
+    const t = tpls.find((x) => String(x.id) === tpl.value);
+    checks.forEach((l) => (l.firstChild.checked = !!t && t.approvers.includes(l.firstChild.value)));
+    ccChecks.forEach((l) => (l.firstChild.checked = !!t && t.cc.includes(l.firstChild.value)));
+    if (t) mode.value = t.mode;
+  } }, [el("option", { value: "" }, "(저장된 결재선 불러오기)"), ...tpls.map((t) => el("option", { value: t.id }, t.name + (t.shared ? " · 공용" : "")))]);
+  const saveName = el("input", { id: "ap-save", placeholder: "이 결재선을 저장할 이름 (선택)" });
+  const picked = (list) => list.map((l) => l.firstChild).filter((c) => c.checked).map((c) => c.value);
+  return dialog("결재 요청", () => el("div", {}, el("p", { class: "hint" }, "선택한 순서대로 결재합니다. 체크한 순서는 목록 순서입니다. 승인되면 현행 버전으로 게시되고 AI 답변·검색에 반영됩니다."), field("결재선 템플릿", tpl),
+    el("label", {}, "결재 방식"), mode, el("label", {}, "결재자"), el("div", { class: "checks" }, checks), el("details", {}, el("summary", {}, "참조(알림만 받음)"), el("div", { class: "checks" }, ccChecks)), field("메모", note), field("결재선 저장", saveName)),
     [{ label: "취소", value: false }, { label: "요청", primary: true, run: async () => {
-      const approvers = checks.map((l) => l.firstChild).filter((c) => c.checked).map((c) => c.value);
+      const approvers = picked(checks), cc = picked(ccChecks);
       if (!approvers.length) throw new Error("결재자를 선택하세요");
-      await api(`/api/docs/${d.id}/submit`, { method: "POST", body: { approvers, mode: mode.value, note: note.value } }); toast("결재를 요청했습니다"); go(`#/doc/${d.id}?tab=approval`); } }]);
+      if (saveName.value.trim()) await api("/api/dms/approval-templates", { method: "PUT", body: { name: saveName.value.trim(), approvers, cc, mode: mode.value } });
+      await api(`/api/docs/${d.id}/submit`, { method: "POST", body: { approvers, mode: mode.value, note: note.value, cc } }); toast("결재를 요청했습니다"); go(`#/doc/${d.id}?tab=approval`); } }]);
 }
 async function moveDialog(d, reload) {
   const tree = await api("/api/dms/folders");
@@ -146,11 +159,13 @@ async function metaDialog(d, reload) {
   const props = el("textarea", { id: "m-props", placeholder: "항목: 값 (한 줄에 하나)" }, Object.entries(d.props || {}).map(([k, v]) => `${k}: ${v}`).join("\n"));
   const exp = el("input", { type: "date", id: "m-exp", value: d.expires_at || "" });
   const nodl = el("input", { type: "checkbox", id: "m-nodl", checked: !!d.props?.no_download });
-  props.value = Object.entries(d.props || {}).filter(([k]) => k !== "no_download").map(([k, v]) => `${k}: ${v}`).join("\n");
-  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), field("사용자 정의 속성", props, "예: 고객사: 제주관광공사"), field("기록물 분류", cls, "분류를 지정하면 보존기간이 문서유형 기준과 비교해 더 긴 쪽으로 적용됩니다"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
+  const cf = customFields(d.doc_type, d.props || {});
+  props.value = Object.entries(d.props || {}).filter(([k]) => k !== "no_download" && !cf.keys.includes(k)).map(([k, v]) => `${k}: ${v}`).join("\n");
+  return dialog("문서 정보 편집", () => el("div", {}, field("제목", title), field("태그", tags), field("설명", desc), cf, field("기타 속성", props, "예: 고객사: 제주관광공사"), field("기록물 분류", cls, "분류를 지정하면 보존기간이 문서유형 기준과 비교해 더 긴 쪽으로 적용됩니다"), field("만료일", exp, "만료되면 본문이 검색·AI 답변에서 제외됩니다"),
     el("label", { class: "inline" }, nodl, "다운로드 제한 (파일 반출·외부 공유 다운로드·ZIP 내보내기 차단. 화면 열람은 가능)")),
     [{ label: "취소", value: false }, { label: "저장", primary: true, run: async () => {
       const pr = {}; for (const line of props.value.split("\n")) { const i = line.indexOf(":"); if (i > 0) pr[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+      Object.assign(pr, cf.get()); for (const k of cf.keys) if (!(k in pr) && d.props?.[k]) pr[k] = "";
       if (nodl.checked) pr.no_download = "1";
       await api("/api/docs/" + d.id, { method: "PUT", body: { title: title.value, tags: tags.value.split(",").map((x) => x.trim()).filter(Boolean), description: desc.value, props: pr, expires_at: exp.value || null, class_code: cls.value } }); toast("저장했습니다"); reload(); } }]);
 }

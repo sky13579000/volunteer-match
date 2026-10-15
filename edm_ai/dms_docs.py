@@ -173,6 +173,7 @@ class DocsMixin:
         level = self.clean_level(p, level)
         ents = self._norm_entries(entries)
         tags, props = self.clean_tags(tags), self.clean_props(props)
+        self.check_fields(t["code"], props)
         expires = self.clean_date(expires_at, "만료일")
         cls = self._class(class_code)
         description = str(description or "")[:2000]
@@ -384,7 +385,9 @@ class DocsMixin:
         if "tags" in f:
             sets["tags"] = json.dumps(self.clean_tags(f["tags"]), ensure_ascii=False)
         if "props" in f:
-            sets["props"] = json.dumps(self.clean_props(f["props"]), ensure_ascii=False)
+            np_ = self.clean_props(f["props"])
+            self.check_fields(row["doc_type"], np_, partial=True)
+            sets["props"] = json.dumps(np_, ensure_ascii=False)
         if "description" in f:
             sets["description"] = str(f["description"] or "")[:2000]
         if "expires_at" in f:

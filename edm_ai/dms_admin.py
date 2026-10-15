@@ -25,6 +25,7 @@ class AdminMixin:
             t["approval_required"] = bool(t["approval_required"])
             t["active"] = bool(t["active"])
             t["default_approvers"] = json.loads(t["default_approvers"] or "[]")
+            t["fields"] = self.type_fields(t["code"])
             out.append(t)
         return out if self.admin(p) else [t for t in out if t["active"]]
 
@@ -57,6 +58,8 @@ class AdminMixin:
         self.x("INSERT INTO doc_types VALUES(?,?,?,?,?,?,?) ON CONFLICT(code) DO UPDATE SET name=excluded.name, pattern=excluded.pattern, "
                "retention_years=excluded.retention_years, approval_required=excluded.approval_required, default_approvers=excluded.default_approvers, active=excluded.active",
                (code, name, pattern, years, int(bool(spec.get("approval_required"))), json.dumps(approvers), int(spec.get("active", True))))
+        if "fields" in spec:
+            self.set_type_fields(p, code, spec["fields"])
         self.store.log_audit(p.id, f"[문서유형 저장] {code}", [], False, "dms")
         return next(t for t in self.list_doc_types(p) if t["code"] == code)
 

@@ -64,7 +64,7 @@ class WorkflowMixin:
                 "note": w["note"], "created": w["created"], "completed": w["completed"], "steps": w["steps"],
                 "can_act": bool(mine), "can_cancel": w["status"] == "pending" and (w["requester"] == p.id or self.admin(p))}
 
-    def submit(self, p, doc_id, approvers: list[str] | None = None, mode="sequential", note="") -> dict:
+    def submit(self, p, doc_id, approvers: list[str] | None = None, mode="sequential", note="", cc: list[str] | None = None) -> dict:
         row = self.get_row(p, doc_id, "edit")
         if row["origin"] != "managed":
             raise DmsError(409, "수집된 문서는 결재할 수 없습니다")
@@ -88,9 +88,12 @@ class WorkflowMixin:
                 raise DmsError(400, "본인을 결재자로 지정할 수 없습니다")
             if a == row["owner"]:
                 raise DmsError(400, "문서 소유자는 결재자가 될 수 없습니다")
+        cc = [str(c) for c in (cc or [])]
+        if len(cc) > 20 or any(c not in self.app.users for c in cc):
+            raise DmsError(400, "참조자에 알 수 없는 사용자가 있습니다 (최대 20명)")
         ts = now()
-        cur = self.x("INSERT INTO workflows(doc_id,ver,requester,mode,status,note,created) VALUES(?,?,?,?,'pending',?,?)",
-                     (doc_id, ver["ver"], p.id, mode, str(note)[:500], ts))
+        cur = self.x("INSERT INTO workflows(doc_id,ver,requester,mode,status,note,created,cc) VALUES(?,?,?,?,'pending',?,?,?)",
+                     (doc_id, ver["ver"], p.id, mode, str(note)[:500], ts, json.dumps(cc)))
         with self.db:
             for i, a in enumerate(approvers):
                 self.db.execute("INSERT INTO wf_steps(wf_id,ord,approver) VALUES(?,?,?)", (cur.lastrowid, i, a))
@@ -101,6 +104,9 @@ class WorkflowMixin:
         self.log(p, row, "submitted", f"{mode}: {', '.join(approvers)}")
         for s in self._active_steps(self._wf(doc_id)):
             self.notify(s["approver"], "approval_request", doc_id, f"결재 요청: {row['title']} ({row['doc_no']}) — 요청자 {p.id}")
+        for c in cc:
+            self.notify(c, "cc_notice", doc_id, f"참조: {row['title']} ({row['doc_no']}) 결재가 올라왔습니다 (열람 권한이 있어야 문서를 볼 수 있습니다)", exclude=p.id)
+        self.apply_absences()
         return self.get(p, doc_id)
 
     def _my_step(self, p, doc_id):
@@ -129,6 +135,7 @@ class WorkflowMixin:
             for s in self._active_steps(w):
                 if s["ord"] != step["ord"] or w["mode"] == "sequential":
                     self.notify(s["approver"], "approval_request", doc_id, f"결재 요청: {row['title']} ({row['doc_no']}) — 앞 단계 승인 완료")
+            self.apply_absences()
         self.log(p, self.row(doc_id), "approved_step", str(comment)[:200])
         return self.get_or_summary(p, doc_id)
 
@@ -164,6 +171,8 @@ class WorkflowMixin:
         self.notify(w["requester"], outcome, doc_id, f"{label}: {row['title']} ({row['doc_no']})" + (f" — {note}" if note else ""), exclude=actor.id)
         if row["owner"] != w["requester"]:
             self.notify(row["owner"], outcome, doc_id, f"{label}: {row['title']} ({row['doc_no']})", exclude=actor.id)
+        for c in json.loads(w.get("cc") or "[]"):
+            self.notify(c, "cc_notice", doc_id, f"참조: {label} 완료 — {row['title']} ({row['doc_no']})", exclude=actor.id)
 
     def delegate(self, p, doc_id, to: str, comment="") -> dict:
         row = self.row(doc_id)

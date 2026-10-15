@@ -40,8 +40,17 @@ route(/^\/dashboard$/, async (view) => {
 
 // ---------------- approvals ----------------
 route(/^\/tasks$/, async (view) => {
-  const t = await api("/api/dms/tasks");
-  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "결재함")),
+  const [t, ab] = await Promise.all([api("/api/dms/tasks"), api("/api/dms/absence")]);
+  const absence = ab.absence && ab.absence.to_ >= new Date().toISOString().slice(0, 10) ? ab.absence : null;
+  const setAbsence = async () => {
+    const dep = el("select", { id: "ab-dep" }, state.meta.users.filter((u) => u.id !== state.me.id).map((u) => el("option", { value: u.id }, `${u.name} (${u.dept || u.id})`)));
+    const from = el("input", { type: "date", id: "ab-from", value: new Date().toISOString().slice(0, 10) }), to = el("input", { type: "date", id: "ab-to" }), why = el("input", { id: "ab-why", placeholder: "사유 (선택)" });
+    await dialog("부재 설정 · 대결자 지정", () => el("div", {}, el("p", { class: "hint" }, "부재 기간 동안 내게 온 결재(진행 중 포함)는 대결자에게 넘어가며, 결재 이력에 '대결'로 남습니다. 최대 180일."), field("대결자", dep), el("div", { class: "grid2" }, field("시작일", from), field("종료일", to)), field("사유", why)),
+      [{ label: "취소", value: false }, { label: "설정", primary: true, run: async () => { const r = await api("/api/dms/absence", { method: "PUT", body: { deputy: dep.value, from: from.value, to: to.value, reason: why.value } }); toast(`대결 설정 완료 (진행 중 ${r.reassigned}건 이관)`); go("#/tasks"); } }]);
+  };
+  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "결재함"), el("span", { class: "grow" }),
+    absence ? el("span", { class: "hint" }, `부재 중: ${absence.frm} ~ ${absence.to_} · 대결 ${userName(absence.deputy)}`) : "",
+    absence ? el("button", { onclick: async () => { await api("/api/dms/absence", { method: "DELETE" }); go("#/tasks"); } }, "부재 해제") : el("button", { id: "ab-set", onclick: () => setAbsence().catch(fail) }, icon("clock", 16), "부재 설정")),
     el("div", { class: "card" }, el("h3", {}, "내가 처리할 결재"), t.tasks.length ? table(["문서번호", "제목", "요청자", "방식", "메모", "요청일", ""], t.tasks.map((x) => [el("span", { class: "ref" }, x.doc_no), x.title, userName(x.requester),
       x.mode === "parallel" ? "병렬" : "순차", x.note || "", fmtDate(x.since), el("button", { class: "sm primary", onclick: () => go(`#/doc/${x.doc_id}?tab=approval`) }, "검토하기")])) : empty("처리할 결재가 없습니다")),
     el("div", { class: "card sec" }, el("h3", {}, "내가 올린 결재"), t.requests.length ? table(["문서번호", "제목", "버전", "상태", "요청일"], t.requests.map((x) => [el("span", { class: "ref" }, x.doc_no), docLink(x), "v" + x.ver,
@@ -61,7 +70,7 @@ route(/^\/trash$/, async (view) => {
 route(/^\/notifications$/, async (view) => {
   const n = await api("/api/dms/notifications");
   const prefs = await api("/api/dms/prefs");
-  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"] };
+  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"], cc_notice: ["참조", ""] };
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }),
     prefs.email_available ? el("label", { class: "inline" }, el("input", { type: "checkbox", id: "pref-email", checked: prefs.email, onchange: async (e) => { try { await api("/api/dms/prefs", { method: "PUT", body: { email: e.target.checked } }); toast(e.target.checked ? "메일 알림을 켰습니다" : "메일 알림을 껐습니다"); } catch (x) { fail(x); } } }), "메일로도 받기") : "",
     el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),
@@ -147,11 +156,15 @@ route(/^\/admin\/types$/, async (view) => {
     const v = t || { code: "", name: "", pattern: "", retention_years: 0, approval_required: false, default_approvers: [], active: true };
     const code = el("input", { id: "dt-code", value: v.code, disabled: !!t, placeholder: "예: PO" }), name = el("input", { id: "dt-name", value: v.name }), pat = el("input", { id: "dt-pat", value: v.pattern, placeholder: "PO-{year}-{seq:04}" });
     const years = el("input", { id: "dt-years", type: "number", min: "0", max: "100", value: String(v.retention_years) }), appr = el("input", { id: "dt-appr", type: "checkbox", checked: v.approval_required }), act = el("input", { id: "dt-act", type: "checkbox", checked: v.active });
+    const FT = { text: "텍스트", number: "숫자", date: "날짜", select: "선택" };
+    const fl = el("textarea", { id: "dt-fields", placeholder: "키|이름|형식(text/number/date/select)|필수(Y)|보기1,보기2\n예: partner|거래처|text|Y\n예: kind|구분|select||용역,물품" },
+      (v.fields || []).map((f) => [f.key, f.label, f.type, f.required ? "Y" : "", f.options.join(",")].join("|")).join("\n"));
     const ap = el("input", { id: "dt-aps", value: v.default_approvers.join(", "), placeholder: "사용자 ID (쉼표)" });
     return dialog(t ? `문서유형 ${t.code}` : "새 문서유형", () => el("div", {}, field("코드 (영문 대문자 2~6자)", code), field("이름", name), field("번호 패턴", pat, "{year} 와 {seq} 만 사용: 예) CT-{year}-{seq:04} → CT-2026-0001"), field("보존 연수 (0=없음)", years),
-      el("label", { class: "inline" }, appr, "결재를 거쳐야 게시"), field("기본 결재자", ap), el("label", { class: "inline" }, act, "사용")),
+      el("label", { class: "inline" }, appr, "결재를 거쳐야 게시"), field("기본 결재자", ap), field("사용자 정의 항목", fl, "한 줄에 하나: 키|이름|형식|필수|보기. 등록·수정 화면에 입력칸이 생기고 값 검증과 CSV 내보내기에 쓰입니다"), el("label", { class: "inline" }, act, "사용")),
       [{ label: "취소", value: false }, { label: "저장", primary: true, run: async () => { await api("/api/dms/admin/doctypes", { method: "PUT", body: { code: code.value, name: name.value, pattern: pat.value || undefined, retention_years: Number(years.value), approval_required: appr.checked,
-        default_approvers: ap.value.split(",").map((x) => x.trim()).filter(Boolean), active: act.checked } }); toast("저장했습니다"); location.reload(); } }]);
+        default_approvers: ap.value.split(",").map((x) => x.trim()).filter(Boolean), active: act.checked,
+        fields: fl.value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => { const [key, label, type, req, opts] = l.split("|").map((x) => (x || "").trim()); return { key, label, type: type || "text", required: req.toUpperCase() === "Y", options: (opts || "").split(",").map((x) => x.trim()).filter(Boolean) }; }) } }); toast("저장했습니다"); location.reload(); } }]);
   };
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "문서유형 · 번호 · 보존"), el("span", { class: "grow" }), el("button", { class: "primary", onclick: () => edit(null).catch(fail) }, "+ 새 유형")),
     table(["코드", "이름", "번호 패턴", "보존", "결재", "기본 결재자", "상태", ""], types.map((t) => [t.code, t.name, el("span", { class: "ref" }, t.pattern), t.retention_years ? t.retention_years + "년" : "-", t.approval_required ? "필요" : "불필요",

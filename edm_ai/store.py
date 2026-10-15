@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS disposal_items(
 CREATE TABLE IF NOT EXISTS disposal_ledger(
   id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
   retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS type_fields(code TEXT PRIMARY KEY, fields TEXT);
+CREATE TABLE IF NOT EXISTS approval_templates(
+  id INTEGER PRIMARY KEY, name TEXT, owner TEXT, approvers TEXT, cc TEXT DEFAULT '[]', mode TEXT DEFAULT 'sequential', shared INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS absences(user_id TEXT PRIMARY KEY, deputy TEXT, frm TEXT, to_ TEXT, reason TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS trust_runs(
   id INTEGER PRIMARY KEY, ts TEXT, by TEXT, cases INTEGER, recall REAL, mrr REAL, leaks INTEGER, failures TEXT, answers TEXT);
 CREATE TABLE IF NOT EXISTS doc_activity(
@@ -171,7 +175,7 @@ class DocumentStore:
         if dcols and "class_code" not in dcols:
             with self.db:
                 self.db.execute("ALTER TABLE dms_docs ADD COLUMN class_code TEXT")
-        for tbl, col, typ in (("disposals", "method", "TEXT DEFAULT 'delete'"), ("disposal_ledger", "method", "TEXT DEFAULT 'delete'"), ("shares", "latest", "INTEGER DEFAULT 0")):
+        for tbl, col, typ in (("disposals", "method", "TEXT DEFAULT 'delete'"), ("disposal_ledger", "method", "TEXT DEFAULT 'delete'"), ("shares", "latest", "INTEGER DEFAULT 0"), ("workflows", "cc", "TEXT DEFAULT '[]'")):
             tc = {r[1] for r in self.db.execute(f"PRAGMA table_info({tbl})")}
             if tc and col not in tc:
                 with self.db:

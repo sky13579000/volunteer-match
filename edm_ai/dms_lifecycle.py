@@ -128,6 +128,7 @@ class LifecycleMixin:
                     res["purged"] += 1
         res["privacy_due"] = self.privacy_maintenance()
         res["trust_run"] = self.trust_maintenance()
+        res["absence_handover"] = self.apply_absences()
         return res
 
     def extend_expiry(self, p, doc_id, new_date) -> dict:
