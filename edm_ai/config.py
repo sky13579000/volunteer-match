@@ -51,6 +51,8 @@ class App:
         self.mailbox = MailIngest(self)
         from .backups import BackupScheduler
         from .license import License
+        from .branding import Branding
+        self.branding = Branding(self)
         self.backups = BackupScheduler(self)
         self.license = License(self)
         from .sources import SourceManager

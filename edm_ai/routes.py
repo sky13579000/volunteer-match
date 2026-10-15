@@ -539,6 +539,20 @@ def build_routes(app):
         b = req.body(big())
         return d.suggest(u, b.get("filename", ""), b64(b.get("content_b64")))
 
+    @route("PUT", r"/api/dms/admin/branding/(logo|hero)")
+    def _logo_put(req, u, m, qs):
+        d._need_admin(u)
+        b = req.body(5_000_000)
+        r = app.branding.save(b.get("filename", ""), b64(b.get("content_b64")), m.group(1))
+        d.store.log_audit(u.id, f"[{'로고' if m.group(1) == 'logo' else '대표 이미지'} 변경]", [], False, "dms")
+        return r
+
+    @route("DELETE", r"/api/dms/admin/branding/(logo|hero)")
+    def _logo_del(req, u, m, qs):
+        d._need_admin(u)
+        d.store.log_audit(u.id, f"[{'로고' if m.group(1) == 'logo' else '대표 이미지'} 삭제]", [], False, "dms")
+        return app.branding.delete(m.group(1))
+
     @route("GET", r"/api/dms/admin/connections")
     def _conn_list(req, u, m, qs):
         d._need_admin(u)

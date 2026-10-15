@@ -22,7 +22,7 @@ STATIC_NAME = re.compile(r"/([A-Za-z0-9_\-]{1,40})\.(js|css)")
 PUBLIC_SHARE = re.compile(r"/s/[A-Za-z0-9_\-]{20,100}")
 FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/app.css": ("app.css", "text/css"),
          "/share.js": ("share.js", "text/javascript")}
-CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 
 
 def make_handler(app: App, demo_login: bool):
@@ -57,7 +57,8 @@ def make_handler(app: App, demo_login: bool):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(length))
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", CSP)
+            if not any(k == "Content-Security-Policy" for k, _ in extra):
+                self.send_header("Content-Security-Policy", CSP)
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Cache-Control", "no-store")
             for k, v in extra:
@@ -195,8 +196,16 @@ def make_handler(app: App, demo_login: bool):
                                       "text/javascript" if sm.group(2) == "js" else "text/css")
                 if PUBLIC_SHARE.fullmatch(path):                       # /s/<token>: the public landing page (no login)
                     return self._send(200, (STATIC / "share.html").read_text("utf-8"), "text/html")
+                if path in ("/brand-logo", "/brand-hero"):
+                    got = app.branding.get("hero" if path == "/brand-hero" else "logo")
+                    if not got:
+                        return self._send(404, {"error": "not found"})
+                    self.send_response(200)
+                    self._headers(got[1], len(got[0]), [("Content-Security-Policy", "default-src 'none'; sandbox")])
+                    self.wfile.write(got[0])
+                    return
                 if path == "/api/config":
-                    return self._send(200, {"auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
+                    return self._send(200, {**app.branding.info(), "auth_mode": acfg["mode"], "demo": demo_login and acfg["mode"] == "header",
                                             "examples": app.cfg.get("examples", []), "version": __version__,
                                             "logout_url": acfg.get("logout_url", "") if acfg["mode"] == "proxy" else ""})
                 if path == "/api/demo-users":

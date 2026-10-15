@@ -353,6 +353,13 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.hash('#/records?tab=dups'); await ad2.waitForSelector('#view .card');
   ok('duplicate documents tab renders', (await ad2.textContent('#view')).includes('중복'));
 
+  await ad2.hash('#/admin/ops'); await ad2.waitForSelector('#logo-file');
+  await ad2.setInputFiles('#logo-file', FILES + '/logo.svg'); await ad2.click('#logo-up');
+  await ad2.waitForSelector('#brand-mark img', { timeout: 15000 });
+  ok('uploaded logo replaces the icon in the sidebar', (await ad2.getAttribute('#brand-mark img', 'src')).startsWith('/brand-logo'));
+  ok('logo image really loads (CSP allows it)', await ad2.evaluate(() => { const i = document.querySelector('#brand-mark img'); return i.complete && i.naturalWidth > 0; }));
+  await ad2.click('button:has-text("기본값으로")'); await ad2.waitForSelector('#brand-mark .ic, #brand-mark svg', { timeout: 15000 });
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');

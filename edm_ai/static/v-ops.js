@@ -1,4 +1,4 @@
-import { api, dialog, el, empty, fail, field, fmtDate, fmtSize, go, pill, route, table, toast } from "./core.js";
+import { api, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtSize, go, pill, route, state, table, toast } from "./core.js";
 import { icon } from "./icons.js";
 
 const LIC = { licensed: ["정식 라이선스", "ok"], evaluation: ["평가판", "warn"], expired: ["만료", "bad"], invalid: ["검증 실패", "bad"] };
@@ -16,7 +16,20 @@ route(/^\/admin\/ops$/, async (view) => {
       [{ label: "취소", value: false }, { label: "등록", primary: true, run: async () => { await api("/api/dms/admin/license", { method: "PUT", body: { text: ta.value } }); toast("등록했습니다"); go("#/admin/ops"); } }]);
   };
   const [ll, lt] = LIC[lic.mode] || [lic.mode, ""];
-  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "백업 · 라이선스")),
+  const brandCard = (kind, title, ic, hint, has, url, idp) => {
+    const file = el("input", { type: "file", id: idp + "-file", accept: ".png,.jpg,.jpeg,.gif,.webp,.svg", "aria-label": title });
+    return el("div", { class: "card sec" }, el("div", { class: "row" }, icon(ic, 20), el("b", {}, title), el("span", { class: "grow" })),
+      el("div", { class: "row sec" }, has ? el("img", { src: url, alt: "현재 " + title, class: "logo-preview" }) : el("span", { class: "hint" }, "기본값을 쓰는 중입니다"), el("span", { class: "grow" }), file,
+        el("button", { class: "primary", id: idp + "-up", onclick: async () => {
+          const f = file.files[0];
+          if (!f) return toast("파일을 선택하세요", "bad");
+          try { await api(`/api/dms/admin/branding/${kind}`, { method: "PUT", body: { filename: f.name, content_b64: await fileToB64(f) } }); toast("바꿨습니다"); location.reload(); } catch (x) { fail(x); }
+        } }, "올리기"), has ? el("button", { onclick: async () => { await api(`/api/dms/admin/branding/${kind}`, { method: "DELETE" }); location.reload(); } }, "기본값으로") : ""),
+      el("p", { class: "hint" }, hint));
+  };
+  const logoCard = brandCard("logo", "로고", "building", "ICC JEJU 홈페이지의 로고 파일(PNG·SVG, 가로형 권장, 1MB 이하, 배경 투명)을 올리면 로그인 화면·왼쪽 메뉴에 적용됩니다. 로고·사진의 사용 권한은 기관에서 확인하세요.", state.cfg.logo, "/brand-logo?v=" + state.cfg.v, "logo");
+  const heroCard = brandCard("hero", "로그인 대표 이미지 (컨벤션센터 사진)", "folder", "로그인 화면 왼쪽 배경에 쓰입니다. 가로 1600px 이상의 JPG·PNG(3MB 이하)를 권장합니다. 올리지 않으면 기본 일러스트가 표시됩니다.", state.cfg.hero, "/brand-hero?v=" + state.cfg.hv, "hero");
+  view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "백업 · 라이선스 · 로고")), logoCard, heroCard,
     el("div", { class: "card" }, el("div", { class: "row" }, icon("key", 20), el("b", {}, "라이선스"), pill(ll, lt), el("span", { class: "grow" }), el("button", { id: "lic-install", onclick: () => install().catch(fail) }, "라이선스 등록")),
       lic.customer ? el("div", { class: "statrow" }, el("div", { class: "stat" }, el("span", { class: "hint" }, "고객"), el("b", {}, lic.customer)), el("div", { class: "stat" }, el("span", { class: "hint" }, "에디션 / 사용자"), el("b", {}, `${lic.edition || "-"} · ${lic.users}/${lic.max_users || "무제한"}`)),
         el("div", { class: "stat" }, el("span", { class: "hint" }, "만료일"), el("b", {}, lic.expires), el("span", { class: "hint" }, `${lic.days_left}일 남음`))) : "",

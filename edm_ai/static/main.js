@@ -13,6 +13,7 @@ import "./v-mail.js";
 import "./v-verify.js";
 import "./v-insight.js";
 import "./v-ops.js";
+import { heroArt } from "./hero-art.js";
 import { toggleNotifPopover } from "./v-notif.js";
 import { refreshBell } from "./v-misc.js";
 import { icon } from "./icons.js";
@@ -59,7 +60,13 @@ async function enter() {
 }
 
 function chrome() {
-  for (const id of ["hero-mark", "brand-mark"]) $("#" + id).append(icon("building", id === "hero-mark" ? 22 : 19));
+  const hero = document.querySelector(".login-hero");
+  hero.prepend(state.cfg.hero ? el("img", { class: "hero-bg", src: "/brand-hero?v=" + state.cfg.hv, alt: "" }) : heroArt());
+  for (const id of ["hero-mark", "brand-mark"]) {
+    const mark = $("#" + id);
+    if (state.cfg.logo) { mark.classList.add("logo"); mark.append(el("img", { src: "/brand-logo?v=" + state.cfg.v, alt: "ICC JEJU 로고" })); }
+    else mark.append(icon("building", id === "hero-mark" ? 22 : 19));
+  }
   $("#search-ic").append(icon("search", 16));
   $("#bell-ic").append(icon("bell", 19));
   $("#logout").append(icon("logout", 16), "로그아웃");
