@@ -127,6 +127,11 @@ class DocumentStore:
                 [(cur.lastrowid, i, t, json.dumps(sorted(e))) for i, (t, e) in enumerate(pieces)])
         return True
 
+    def prune_sources(self, sources: list[str]) -> int:
+        with self.db:
+            self.db.executemany("DELETE FROM documents WHERE source=?", [(x,) for x in sources])
+        return len(sources)
+
     def would_change(self, source: str, acl: Acl, raw: str) -> bool:
         sha = hashlib.sha256((PIPELINE_VERSION + raw + json.dumps(acl.to_dict(), sort_keys=True)).encode()).hexdigest()
         row = self.db.execute("SELECT sha FROM documents WHERE source=?", (source,)).fetchone()

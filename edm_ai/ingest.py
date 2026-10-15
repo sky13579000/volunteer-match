@@ -83,12 +83,12 @@ def ingest_roots(roots: list[Root], store: DocumentStore, extractor: EntityExtra
     stats = {"added": 0, "unchanged": 0, "pruned": 0, "skipped": [], "roots": {}}
     seen: set = set()
     overrides = store.acl_overrides()   # ACLs edited in the UI take precedence over manifest rules
-    complete = True
+    protected: list[str] = []                 # prefixes of unreachable roots: what they contributed so far is kept
     for root in roots:
         rs = stats["roots"].setdefault(root.prefix or "/", {"added": 0, "unchanged": 0, "skipped": [], "error": ""})
         if not root.path.is_dir():
             rs["error"] = f"경로에 접근할 수 없습니다: {root.path}"
-            complete = False
+            protected.append(root.prefix)
             continue
         for path in sorted(root.path.rglob("*")):
             try:
@@ -125,10 +125,13 @@ def ingest_roots(roots: list[Root], store: DocumentStore, extractor: EntityExtra
             rs[key] += 1
             if changed and not dry_run:
                 store.add_history(sid, "system", "indexed", f"{len(pieces)} chunks")
-    if complete and not dry_run:
-        stats["pruned"] = store.prune(seen)
-    elif complete:
-        stats["pruned"] = sum(1 for r in store.db.execute("SELECT source FROM documents") if r[0] not in seen and not r[0].startswith(MANAGED_PREFIX))
+    keep_all = "" in protected
+    gone = [] if keep_all else [r[0] for r in store.db.execute("SELECT source FROM documents")
+                                if r[0] not in seen and not r[0].startswith(MANAGED_PREFIX) and not any(r[0].startswith(p) for p in protected)]
+    if gone and not dry_run:
+        stats["pruned"] = store.prune_sources(gone)
+    else:
+        stats["pruned"] = len(gone)
     return stats
 
 
