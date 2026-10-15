@@ -120,6 +120,17 @@ curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H 
 - **PC 동기화 에이전트** `tools/edm_sync.py`: 직원 PC의 폴더를 API 키(write)로 주기 업로드(`--interval`) — 변경분만 전송, 삭제는 하지 않음, `--dry-run` 지원.
 - **미구현/미시험**: SMB/NTFS 권한(ACL) 자동 가져오기, SFTP, 클라우드 스토리지(S3·OneDrive). FTP·WebDAV는 시험용 서버로 검증했고 실제 NAS 제품과의 호환은 현장 확인이 필요합니다.
 
+## 7. 이메일 연동 (IMAP 수집 · 링크 발송)
+
+**수집**: `config.json` 의 `mail.imap` 목록에 IMAP 계정을 추가하면, 지정한 메일함의 읽지 않은 메일을 **보낸 사람 이름으로** 문서함에 등록합니다.
+보낸 사람의 이메일이 사용자(`users.json` 의 `email`)와 일치해야 하며, `allowed_senders` 로 더 좁힐 수 있습니다.
+`register` 는 `message`(본문 .eml) / `attachments`(첨부만) / `both`, 규칙(`rules`)은 제목 `#태그`·`re:` 접두·보낸 사람·받는 사람으로
+폴더·문서유형·태그·보안등급·접근권한을 지정합니다. 같은 메일은 Message-ID 로 중복 등록되지 않고, 실행 파일 첨부와 개인정보 차단(DLP block) 정책이 적용됩니다.
+처리한 메일은 읽음 표시하거나 `move_to` 로 옮깁니다. 관리 화면 **관리 > 메일 연동** 에서 미리보기(드라이런)·즉시 수집·메일별 결과를 볼 수 있습니다.
+
+**발송**: 문서 상세의 공유에서 이메일을 입력하면 파일을 첨부하지 않고 **받는 사람마다 별도의 만료 링크**를 보냅니다(열람·다운로드가 사람별로 기록, 언제든 회수).
+비밀번호는 화면 표시 또는 별도 메일로 보낼 수 있습니다. `notify.smtp` 와 `notify.base_url` 이 필요합니다. API: `POST /api/docs/{id}/send-link`.
+
 ## 점검 체크리스트
 1. 조직도 동기화 미리보기 → 경고(미매핑 부서/등급 상한) 해소 → `--apply`
 2. SSO: 한 명의 이메일로 로그인 → `/api/me` 확인 → 등록 안 된 계정은 401 확인

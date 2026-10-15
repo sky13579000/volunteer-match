@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS source_runs(
   id INTEGER PRIMARY KEY, source TEXT, kind TEXT, ts TEXT, ok INTEGER, stats TEXT);
 CREATE TABLE IF NOT EXISTS source_items(
   source TEXT, rel TEXT, status TEXT, doc_id INTEGER, sha256 TEXT, note TEXT, ts TEXT, PRIMARY KEY(source, rel));
+CREATE TABLE IF NOT EXISTS mail_items(
+  id INTEGER PRIMARY KEY, account TEXT, message_id TEXT, subject TEXT, sender TEXT, status TEXT, doc_ids TEXT, note TEXT, ts TEXT, UNIQUE(account, message_id));
 CREATE TABLE IF NOT EXISTS follows(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));

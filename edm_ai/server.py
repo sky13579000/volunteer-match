@@ -347,13 +347,18 @@ def _sources_loop(app: App):
                     log.info("source %s: %s", name, {k: v for k, v in app.sources.sync(name).items() if k not in ("errors", "skipped")})
                 except Exception:
                     log.exception("scheduled sync of %s failed", name)
+            for name in app.mailbox.due():
+                try:
+                    log.info("mail %s: %s", name, {k: v for k, v in app.mailbox.run(name).items() if k != "errors"})
+                except Exception:
+                    log.exception("scheduled mail run of %s failed", name)
         except Exception:
             log.exception("source scheduler failed")
 
 
 def serve(app: App, host="127.0.0.1", port=8080, demo_login=False, ingest=False, reindex_every=0):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if app.sources.cfgs:
+    if app.sources.cfgs or app.mailbox.cfgs:
         threading.Thread(target=_sources_loop, args=(app,), daemon=True, name="edm-sources").start()
     if ingest:
         log.info("startup ingest: %s", {k: v for k, v in app.ingest().items() if k != "roots"})

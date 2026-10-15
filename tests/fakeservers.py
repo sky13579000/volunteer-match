@@ -1,5 +1,6 @@
 """Tiny FTP and WebDAV servers for tests (standard library only)."""
 import os
+import re
 import socket
 import socketserver
 import threading
@@ -160,6 +161,99 @@ class DavServer:
                 pass
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}/"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+class ImapServer:
+    """IMAP4rev1 subset over plain TCP: LOGIN, SELECT/EXAMINE, UID SEARCH (UNSEEN|ALL), UID FETCH BODY.PEEK[], UID STORE, UID COPY, EXPUNGE."""
+
+    def __init__(self, messages, user="u", password="p"):
+        self.boxes = {"INBOX": [{"uid": i + 1, "raw": raw, "flags": set()} for i, raw in enumerate(messages)], "Processed": []}
+        self.user, self.password = user, password
+        self.lock = threading.Lock()
+        outer = self
+
+        class H(socketserver.StreamRequestHandler):
+            def handle(self):
+                w = lambda s: self.wfile.write(s if isinstance(s, bytes) else s.encode())  # noqa: E731
+                w("* OK fake imap\r\n")
+                box, ok, ro = None, False, False
+                while True:
+                    line = self.rfile.readline().decode("utf-8", "replace").rstrip("\r\n")
+                    if not line:
+                        return
+                    tag, _, rest = line.partition(" ")
+                    cmd, _, arg = rest.partition(" ")
+                    cmd = cmd.upper()
+                    if cmd == "CAPABILITY":
+                        w(f"* CAPABILITY IMAP4rev1\r\n{tag} OK done\r\n")
+                    elif cmd == "LOGIN":
+                        u, p = [x.strip('"') for x in arg.split(" ", 1)]
+                        ok = u == outer.user and p == outer.password
+                        w(f"{tag} OK logged in\r\n" if ok else f"{tag} NO [AUTHENTICATIONFAILED] bad credentials\r\n")
+                    elif not ok:
+                        w(f"{tag} BAD login first\r\n")
+                    elif cmd in ("SELECT", "EXAMINE"):
+                        name = arg.strip('"')
+                        if name not in outer.boxes:
+                            w(f"{tag} NO no such mailbox\r\n")
+                            continue
+                        box, ro = name, cmd == "EXAMINE"
+                        w(f"* {len(outer.boxes[box])} EXISTS\r\n{tag} OK [{'READ-ONLY' if ro else 'READ-WRITE'}] selected\r\n")
+                    elif cmd == "UID":
+                        sub, _, a2 = arg.partition(" ")
+                        sub = sub.upper()
+                        with outer.lock:
+                            msgs = outer.boxes[box]
+                            if sub == "SEARCH":
+                                crit = a2.strip().upper()
+                                hit = [m["uid"] for m in msgs if crit == "ALL" or "\\Seen" not in m["flags"]]
+                                w("* SEARCH " + " ".join(map(str, hit)) + f"\r\n{tag} OK done\r\n")
+                            elif sub == "FETCH":
+                                uid = int(a2.split()[0])
+                                m = next((x for x in msgs if x["uid"] == uid), None)
+                                if not m:
+                                    w(f"{tag} OK done\r\n")
+                                    continue
+                                w(f"* {msgs.index(m) + 1} FETCH (UID {uid} BODY[] {{{len(m['raw'])}}}\r\n")
+                                w(m["raw"])
+                                w(f")\r\n{tag} OK done\r\n")
+                            elif sub == "STORE":
+                                if ro:
+                                    w(f"{tag} NO read-only\r\n")
+                                    continue
+                                uid = int(a2.split()[0])
+                                flags = set(re.findall(r"\\\w+", a2))
+                                for m in msgs:
+                                    if m["uid"] == uid:
+                                        m["flags"] |= flags
+                                w(f"{tag} OK done\r\n")
+                            elif sub == "COPY":
+                                uid, dest = a2.split()[0], a2.split(" ", 1)[1].strip('"')
+                                for m in msgs:
+                                    if m["uid"] == int(uid) and dest in outer.boxes:
+                                        outer.boxes[dest].append({"uid": len(outer.boxes[dest]) + 1, "raw": m["raw"], "flags": set()})
+                                w(f"{tag} OK copied\r\n")
+                            else:
+                                w(f"{tag} BAD\r\n")
+                    elif cmd == "EXPUNGE":
+                        with outer.lock:
+                            outer.boxes[box][:] = [m for m in outer.boxes[box] if "\\Deleted" not in m["flags"]]
+                        w(f"{tag} OK done\r\n")
+                    elif cmd == "CLOSE" or cmd == "NOOP":
+                        w(f"{tag} OK done\r\n")
+                    elif cmd == "LOGOUT":
+                        w(f"* BYE\r\n{tag} OK bye\r\n")
+                        return
+                    else:
+                        w(f"{tag} BAD unknown\r\n")
+        self.srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), H)
+        self.srv.daemon_threads = True
+        self.port = self.srv.server_address[1]
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
     def close(self):

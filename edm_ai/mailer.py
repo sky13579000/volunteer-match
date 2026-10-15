@@ -64,6 +64,22 @@ class Mailer:
         msg.set_content("\n".join(lines))
         return msg
 
+    def build_text(self, to: str, subject: str, lines: list[str]) -> EmailMessage:
+        msg = EmailMessage()
+        msg["From"], msg["To"], msg["Subject"] = self.sender, clean(to), clean(subject, 250)
+        msg.set_content("\n".join(lines))
+        return msg
+
+    def build_share(self, to: str, sender_name: str, doc_no: str, title: str, url: str, expires: str, message: str = "", has_password: bool = False) -> EmailMessage:
+        lines = [f"{clean(sender_name, 60)} 님이 문서를 공유했습니다."]
+        if message.strip():
+            lines += ["", clean(message, 1000).replace("\\n", "\n")]
+        lines += ["", f"문서: {clean(doc_no, 40)} {clean(title, 150)}", f"열기: {url}", f"유효기간: {expires[:10]} 까지"]
+        if has_password:
+            lines.append("이 문서는 비밀번호가 필요합니다. 비밀번호는 보낸 사람에게 따로 받으세요.")
+        lines += ["", "이 링크는 받는 분 전용입니다. 다른 사람에게 전달하지 마세요. 열람·다운로드 기록이 보낸 사람에게 남습니다."]
+        return self.build_text(to, f"[ICC JEJU] {clean(sender_name, 40)} 님이 문서를 공유했습니다", lines)
+
     def enqueue(self, msg: EmailMessage):
         try:
             self.q.put_nowait(msg)

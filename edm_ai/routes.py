@@ -459,6 +459,29 @@ def build_routes(app):
             raise DmsError(404, "저장소를 찾을 수 없습니다")
         return {"items": app.sources.items(name, q1(qs, "status"))}
 
+    @route("POST", r"/api/docs/(\d+)/send-link")
+    def _send_link(req, u, m, qs):
+        b = req.body(16384)
+        return d.send_share_mail(u, i(m), b.get("to"), b.get("message", ""), b.get("days", 7), b.get("max_downloads", 0), b.get("password") or None, b.get("perm", "view"), b.get("password_mode", "show"))
+
+    @route("GET", r"/api/dms/admin/mail")
+    def _mail(req, u, m, qs):
+        d._need_admin(u)
+        return {"items": app.mailbox.status()}
+
+    @route("POST", r"/api/dms/admin/mail/([^/]+)/run")
+    def _mail_run(req, u, m, qs):
+        d._need_admin(u)
+        return app.mailbox.run(urllib.parse.unquote(m.group(1)), bool(req.body(1024).get("dry_run")))
+
+    @route("GET", r"/api/dms/admin/mail/([^/]+)/items")
+    def _mail_items(req, u, m, qs):
+        d._need_admin(u)
+        name = urllib.parse.unquote(m.group(1))
+        if name not in app.mailbox.cfgs:
+            raise DmsError(404, "메일 계정을 찾을 수 없습니다")
+        return {"items": app.mailbox.items(name)}
+
     @route("GET", r"/api/dms/admin/users")
     def _admin_users(req, u, m, qs):
         return d.admin_users(u)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
@@ -59,6 +60,31 @@ class ShareMixin:
         self.log(p, row, "share_created", f"#{cur.lastrowid} {perm} {days}d" + (" pw" if pwh else ""))
         return {"id": cur.lastrowid, "token": token, "path": f"/s/{token}", "expires": add_days(now(), days), "perm": perm,
                 "password": bool(pwh), "note": "이 링크는 지금만 표시됩니다. 서버에는 해시만 저장됩니다."}
+
+    def send_share_mail(self, p, doc_id, to, message="", days=7, max_downloads=0, password=None, perm="view", password_mode="show") -> dict:
+        """Share a document BY LINK instead of attaching it: one link per recipient (so opens/downloads are tracked per person),
+        revocable and expiring; the file itself never leaves the platform in the mail."""
+        mailer = self.app.mailer
+        base = (self.app.cfg.get("notify") or {}).get("base_url", "").rstrip("/")
+        if not mailer or not base:
+            raise DmsError(400, "메일 발송이 설정되지 않았습니다 (notify.smtp 와 notify.base_url)")
+        rcpt = [str(x).strip().lower() for x in (to if isinstance(to, list) else [to]) if str(x).strip()]
+        if not rcpt or len(rcpt) > 20 or any(not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+", x) or len(x) > 200 for x in rcpt):
+            raise DmsError(400, "받는 사람은 올바른 이메일 주소 1~20개여야 합니다")
+        if password_mode not in ("show", "mail"):
+            raise DmsError(400, "password_mode 는 show 또는 mail 입니다")
+        row = self.get_row(p, doc_id, "share")
+        out = []
+        for r in dict.fromkeys(rcpt):
+            sh = self.create_share(p, doc_id, days, max_downloads, password, perm, note=r)
+            url = f"{base}/s/{sh['token']}"
+            mailer.enqueue(mailer.build_share(r, p.name, row["doc_no"], row["title"] if self.app.cfg.get("notify", {}).get("smtp", {}).get("include_title", True) else "", url, sh["expires"], message, bool(password)))
+            if password and password_mode == "mail":
+                mailer.enqueue(mailer.build_text(r, f"[ICC JEJU] 문서 열람 비밀번호 ({row['doc_no']})", [f"{p.name} 님이 공유한 문서 {row['doc_no']} 의 열람 비밀번호입니다.", "", str(password)]))
+            out.append({"to": r, "share_id": sh["id"], "expires": sh["expires"]})
+        self.log(p, row, "share_mailed", f"{len(out)}명")
+        return {"sent": out, "password": str(password) if password and password_mode == "show" else None,
+                "note": "받는 사람마다 별도의 링크가 만들어져 열람·다운로드가 사람별로 기록됩니다."}
 
     def list_shares(self, p, doc_id) -> list[dict]:
         self.get_row(p, doc_id, "share")

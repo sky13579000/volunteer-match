@@ -44,6 +44,8 @@ class App:
         self._users_mtime = 0.0
         self._users_checked = 0.0
         self.reload_users()
+        from .mailbox import MailIngest
+        self.mailbox = MailIngest(self)
         from .sources import SourceManager
         self.sources = SourceManager(self)
         from .dms_all import Dms
