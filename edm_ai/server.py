@@ -162,6 +162,26 @@ def make_handler(app: App, demo_login: bool):
                 except Exception:
                     pass
 
+        def _metrics(self):
+            """Prometheus text. Off unless env EDM_AI_METRICS_TOKEN is set; then needs `Authorization: Bearer <token>`. Counts only - no titles, no users."""
+            import hmac as _h
+            tok = os.environ.get("EDM_AI_METRICS_TOKEN", "")
+            got = self.headers.get("Authorization", "")[7:] if self.headers.get("Authorization", "").startswith("Bearer ") else ""
+            if not tok or not _h.compare_digest(got.encode(), tok.encode()):
+                return self._send(404, {"error": "not found"})
+            with lock:
+                q = lambda sql: (app.store.db.execute(sql).fetchone() or (0,))[0] or 0  # noqa: E731
+                bk = app.backups.status()
+                lic = app.license.status()
+                lines = [("edm_documents", q("SELECT COUNT(*) FROM dms_docs WHERE deleted_at IS NULL")), ("edm_versions", q("SELECT COUNT(*) FROM dms_versions")),
+                         ("edm_storage_bytes", q("SELECT COALESCE(SUM(size),0) FROM dms_versions")), ("edm_pending_approvals", q("SELECT COUNT(*) FROM workflows WHERE status='pending'")),
+                         ("edm_questions_total", q("SELECT COUNT(*) FROM audit WHERE generator IS NOT NULL")), ("edm_questions_refused_total", q("SELECT COUNT(*) FROM audit WHERE refused=1")),
+                         ("edm_users", len(app.users)), ("edm_pending_disposals", q("SELECT COUNT(*) FROM disposals WHERE status='pending'")),
+                         ("edm_trust_last_leaks", q("SELECT leaks FROM trust_runs ORDER BY id DESC LIMIT 1")),
+                         ("edm_backup_last_ok_age_seconds", bk["last_ok_age_seconds"] if bk["last_ok_age_seconds"] is not None else -1),
+                         ("edm_license_days_left", lic.get("days_left", -1)), ("edm_license_valid", int(lic["mode"] == "licensed"))]
+            self._send(200, "".join(f"# TYPE {k} gauge\n{k} {v}\n" for k, v in lines), "text/plain; version=0.0.4")
+
         # ---------- routing ----------
         def _dispatch(self, method):
             url = urlparse(self.path)
@@ -185,6 +205,8 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(200, [{"id": x.id, "name": x.name, "dept": x.dept, "dept_name": app.cfg.get("departments", {}).get(x.dept, x.dept), "level": x.level} for x in app.users.values()])
                 if path == "/api/health":
                     return self._send(200, {"ok": True})
+                if path == "/metrics":
+                    return self._metrics()
             if path.startswith("/api/share/"):
                 return self._public_share(method, path)
             if method == "POST" and path.startswith("/api/adapters/"):
@@ -198,6 +220,9 @@ def make_handler(app: App, demo_login: bool):
                     return self._send(403, {"error": "API 키로는 관리 기능을 사용할 수 없습니다"})
                 if self._key[0] == "read" and method != "GET" and path != "/api/ask":
                     return self._send(403, {"error": "조회 전용 API 키입니다"})
+            if method == "GET" and path == "/api/license":
+                st = app.license.status()
+                return self._send(200, st if "admin" in u.roles else {"mode": st["mode"], "message": st.get("message", ""), "days_left": st.get("days_left")})
             if method == "GET" and path == "/api/me":
                 return self._send(200, {"id": u.id, "name": u.name, "dept": u.dept, "level": u.level, "is_admin": "admin" in u.roles,
                                             "is_records": "admin" in u.roles or "records" in u.roles})
@@ -347,6 +372,11 @@ def _sources_loop(app: App):
                     log.info("source %s: %s", name, {k: v for k, v in app.sources.sync(name).items() if k not in ("errors", "skipped")})
                 except Exception:
                     log.exception("scheduled sync of %s failed", name)
+            if app.backups.due():
+                try:
+                    log.info("scheduled backup: %s", app.backups.run())
+                except Exception:
+                    log.exception("scheduled backup failed")
             for name in app.mailbox.due():
                 try:
                     log.info("mail %s: %s", name, {k: v for k, v in app.mailbox.run(name).items() if k != "errors"})
@@ -358,7 +388,7 @@ def _sources_loop(app: App):
 
 def serve(app: App, host="127.0.0.1", port=8080, demo_login=False, ingest=False, reindex_every=0):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if app.sources.cfgs or app.mailbox.cfgs:
+    if app.sources.cfgs or app.mailbox.cfgs or app.backups.enabled():
         threading.Thread(target=_sources_loop, args=(app,), daemon=True, name="edm-sources").start()
     if ingest:
         log.info("startup ingest: %s", {k: v for k, v in app.ingest().items() if k != "roots"})

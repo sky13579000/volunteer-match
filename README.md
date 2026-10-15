@@ -74,6 +74,11 @@ cd deploy && docker compose up -d --build            # 사설 CA 뒤라면: CA_B
 
 구조와 보안 모델 상세: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## v0.7 — 문서 중앙화·개인정보·운영 도구
+- 새 기능과 사용법: `docs/USER_MANUAL.md`(사용자), `docs/ADMIN_MANUAL.md`(관리자), `docs/INTEGRATION.md` 6~8장(NAS·메일·최신본 추적), `docs/SECURITY.md`(개인정보 파기·암호화·DRM).
+- 설정 키: `sources`, `mail.imap`, `storage.encrypt`, `protection`, `tracing`, `eval`, `backup`, `license`, `privacy`, `disposal.secure_wipe`.
+- 공급사 도구: `tools/license_tool.py`(라이선스 키·발급), `tools/make_manual_shots.js`(매뉴얼 스크린샷).
+
 ## v0.6 — 기록물·보안·연동 (판매용 보강)
 - **기록물 관리**: 분류표(보존기간 연계·영구), 폐기 심의(신청자≠승인자)·폐기 대장, **개인정보 검출**(주민·외국인등록번호·카드·여권·전화·이메일; 경고/차단/보안등급 상향)
 - **리포트**: 등록 추이, 부서별, 결재 소요, AI 근거 확보율, 보존 예정, 공유 현황 + CSV/인쇄

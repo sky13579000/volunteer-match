@@ -101,7 +101,7 @@ class InsightMixin:
                 rest = rest.replace(w, " ")
                 break
         for t in self.q("SELECT code,name FROM doc_types WHERE active=1"):
-            for w in {t["name"], *(k for k, v in TYPE_WORDS.items() if v == t["code"])}:
+            for w in sorted({t["name"], *(k for k, v in TYPE_WORDS.items() if v == t["code"])}, key=len, reverse=True):
                 if w and w in rest:
                     f["type"] = t["code"]
                     why.append(f"유형: {t['name']}")

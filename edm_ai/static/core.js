@@ -239,3 +239,21 @@ export function menu(label, items, { ic = "chevron", cls = "" } = {}) {
 
 export const deptName = (id) => state.meta?.departments?.[id] || id || "-";
 export const fmtHours = (h) => (h == null ? "-" : h < 1 ? "1시간 미만" : h < 48 ? `${h}시간` : `${Math.round(h / 24)}일`);
+
+// Evidence highlighting: wrap the question's terms in <mark>. Built from text nodes only (never innerHTML).
+export function highlight(text, question) {
+  const terms = [...new Set((question || "").split(/[\s,.?!·()\[\]"']+/).filter((t) => t.length >= 2))].sort((a, b) => b.length - a.length).slice(0, 8);
+  const frag = document.createDocumentFragment();
+  if (!terms.length) { frag.append(document.createTextNode(text)); return frag; }
+  const esc = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${esc.join("|")})`, "gi");
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) frag.append(document.createTextNode(text.slice(last, m.index)));
+    const mk = document.createElement("mark"); mk.textContent = m[0]; frag.append(mk);
+    last = m.index + m[0].length;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  if (last < text.length) frag.append(document.createTextNode(text.slice(last)));
+  return frag;
+}

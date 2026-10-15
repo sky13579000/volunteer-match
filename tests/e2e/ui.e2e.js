@@ -183,6 +183,7 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.hash('#/chat'); await kim.fill('#q', '2026 유치 계획 목표 계약 건수'); await kim.click('#send'); await kim.waitForSelector('.a');
   await kim.click('.a summary'); await kim.waitForTimeout(300);
   ok('AI answer cites a managed document with an open-link', (await kim.$$('.ev .link')).length >= 1);
+  ok('evidence highlights the question terms', (await kim.$$('.ev .t mark')).length >= 1);
 
   // outsider asking the AI about the unpublished v2 clause gets nothing from kim's document
   await choi.hash('#/chat'); await choi.fill('#q', '제3조 신설 지체상금 e2e유니크토큰'); await choi.click('#send'); await choi.waitForSelector('.a');
@@ -327,6 +328,11 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.click('#ab-set'); await kim.waitForSelector('#ab-dep');
   ok('absence dialog lists deputies', (await kim.locator('#ab-dep option').count()) > 1);
   await kim.keyboard.press('Escape');
+
+  await ad2.hash('#/admin/ops'); await ad2.waitForSelector('#bk-run');
+  await ad2.click('#bk-run'); await ad2.waitForSelector('.tbl');
+  await ad2.waitForTimeout(900);
+  ok('backup runs and is verified', (await ad2.textContent('#view')).includes('성공') && (await ad2.textContent('#view')).includes('평가판'));
 
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');

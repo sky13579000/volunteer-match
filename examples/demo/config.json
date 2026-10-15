@@ -274,6 +274,11 @@
     "daily": true,
     "min_recall": 0.8
   },
+  "backup": {
+    "dir": "backups",
+    "every_hours": 24,
+    "keep": 7
+  },
   "tracing": {
     "log_views": true,
     "tag_downloads": true

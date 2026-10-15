@@ -274,3 +274,5 @@ dialog.palette{width:min(640px,calc(100% - 24px));margin-top:12vh;padding:0;over
   dialog { position: static !important; box-shadow: none !important; border: 0 !important; max-width: none !important; width: 100% !important; }
   dialog .dlg-f { display: none !important; }
 }
+.lic-banner{background:var(--warn-soft,#fff4d6);color:var(--warn,#8a5a00);padding:8px 16px;font-size:13px;border-bottom:1px solid var(--line,#ddd)}
+.ev .t mark{background:var(--warn-soft,#fff1b8);color:inherit;border-radius:3px;padding:0 2px}

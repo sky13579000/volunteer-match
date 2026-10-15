@@ -5,3 +5,4 @@ examples/demo/workspace/
 .venv/
 examples/demo/docs/uploads/
 dist/
+examples/demo/backups/

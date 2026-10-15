@@ -518,6 +518,26 @@ def build_routes(app):
             raise DmsError(404, "저장소를 찾을 수 없습니다")
         return {"items": app.sources.items(name, q1(qs, "status"))}
 
+    @route("GET", r"/api/dms/admin/backups")
+    def _backups(req, u, m, qs):
+        d._need_admin(u)
+        return app.backups.status()
+
+    @route("POST", r"/api/dms/admin/backups/run")
+    def _backup_run(req, u, m, qs):
+        d._need_admin(u)
+        return app.backups.run(u.id)
+
+    @route("PUT", r"/api/dms/admin/license")
+    def _license_put(req, u, m, qs):
+        d._need_admin(u)
+        try:
+            st = app.license.install(req.body(65536).get("text", ""))
+        except ValueError as e:
+            raise DmsError(400, str(e))
+        d.store.log_audit(u.id, f"[라이선스 등록] {st.get('customer', '')} ~{st.get('expires', '')}", [], False, "dms")
+        return st
+
     @route("GET", r"/api/dms/admin/trust")
     def _trust(req, u, m, qs):
         return d.trust_status(u)

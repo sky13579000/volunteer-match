@@ -1,4 +1,4 @@
-import { $, renderMd, avatar, fileTile, menu, relTime, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { $, highlight, renderMd, avatar, fileTile, menu, relTime, aclEditor, api, confirmDialog, dialog, el, empty, fail, field, fileToB64, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { folderOptions } from "./v-docs.js";
 import { requestDialog } from "./v-social.js";
 import { icon } from "./icons.js";
@@ -88,7 +88,7 @@ function askTab(d) {
       const a = await api(`/api/docs/${d.id}/ask`, { method: "POST", body: { question: q.value } });
       out.replaceChildren(el("div", { class: "a" + (a.refused ? " refused" : "") }, a.answer.split("\n").map((l) => el("p", {}, l)),
         el("div", { class: "hint" }, a.refused ? (d.status === "approved" ? "이 문서에서 근거를 찾지 못했습니다" : "결재가 끝나 승인된 버전만 AI 답변에 쓰입니다") : `${a.evidence.length}건의 근거 · 이 문서${a.evidence.some((e) => e.kind === "row") ? "와 연결된 업무 DB 행" : ""}만 사용`)),
-      ...a.evidence.map((e) => el("div", { class: "ev " + e.kind }, el("b", {}, `[${e.id}] ${e.title}`), el("div", { class: "ref" }, e.ref), el("div", { class: "t" }, e.text),
+      ...a.evidence.map((e) => el("div", { class: "ev " + e.kind }, el("b", {}, `[${e.id}] ${e.title}`), el("div", { class: "ref" }, e.ref), el("div", { class: "t" }, highlight(e.text, q.value)),
         e.masked_columns.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + e.masked_columns.join(", ")) : "")));
     } catch (e) { out.replaceChildren(el("p", { class: "err" }, e.message)); }
   };

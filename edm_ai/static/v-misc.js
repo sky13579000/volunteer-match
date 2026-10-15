@@ -1,4 +1,4 @@
-import { STATUS, api, confirmDialog, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, setNavBadge, state, statusPill, table, toast, typeName, userName } from "./core.js";
+import { STATUS, highlight, api, confirmDialog, dialog, el, empty, fail, field, fmtDate, fmtDay, fmtNum, fmtSize, go, pill, route, saveBlob, setNavBadge, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { icon } from "./icons.js";
 import { registerDialog } from "./v-docs.js";
 
@@ -108,7 +108,7 @@ route(/^\/chat$/, async (view) => {
     const box = el("details");
     box.append(el("summary", {}, `근거 ${a.evidence.length}건`));
     for (const e of a.evidence) box.append(el("div", { class: "ev " + e.kind, "data-id": e.id }, el("div", {}, el("span", { class: "kind " + e.kind }, KIND[e.kind] || e.kind), el("b", {}, `[${e.id}] ${e.title}`),
-      e.doc_id ? el("button", { class: "link", onclick: () => open(e.doc_id) }, " 문서 열기") : ""), el("div", { class: "ref" }, e.ref), el("div", { class: "t" }, e.text),
+      e.doc_id ? el("button", { class: "link", onclick: () => open(e.doc_id) }, " 문서 열기") : ""), el("div", { class: "ref" }, e.ref), el("div", { class: "t" }, highlight(e.text, q)),
       e.masked_columns.length ? el("div", { class: "mask" }, "권한 없음으로 가려진 컬럼: " + e.masked_columns.join(", ") ) : ""));
     const ans = el("div", { class: "a" + (a.refused ? " refused" : "") });
     if (a.refused) ans.append(el("p", {}, a.answer)); else a.answer.split("\n").forEach((l) => ans.append(cites(l, box)));

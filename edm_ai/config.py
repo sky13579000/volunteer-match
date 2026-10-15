@@ -46,6 +46,10 @@ class App:
         self.reload_users()
         from .mailbox import MailIngest
         self.mailbox = MailIngest(self)
+        from .backups import BackupScheduler
+        from .license import License
+        self.backups = BackupScheduler(self)
+        self.license = License(self)
         from .sources import SourceManager
         self.sources = SourceManager(self)
         from .dms_all import Dms
