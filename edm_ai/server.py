@@ -337,10 +337,26 @@ def _reindex_loop(app: App, every: int):
             log.exception("reindex failed (serving previous index)")
 
 
+def _sources_loop(app: App):
+    """Runs scheduled storage syncs (schedule_minutes per source). Network transfers happen outside the request lock."""
+    while True:
+        time.sleep(30)
+        try:
+            for name in app.sources.due():
+                try:
+                    log.info("source %s: %s", name, {k: v for k, v in app.sources.sync(name).items() if k not in ("errors", "skipped")})
+                except Exception:
+                    log.exception("scheduled sync of %s failed", name)
+        except Exception:
+            log.exception("source scheduler failed")
+
+
 def serve(app: App, host="127.0.0.1", port=8080, demo_login=False, ingest=False, reindex_every=0):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if app.sources.cfgs:
+        threading.Thread(target=_sources_loop, args=(app,), daemon=True, name="edm-sources").start()
     if ingest:
-        log.info("startup ingest: %s", app.ingest())
+        log.info("startup ingest: %s", {k: v for k, v in app.ingest().items() if k != "roots"})
     with app.lock:
         log.info("startup maintenance: %s", app.dms.maintenance())
     if reindex_every:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import re
+import urllib.parse
 from dataclasses import dataclass
 
 from .errors import DmsError
@@ -435,6 +436,28 @@ def build_routes(app):
         d._need_admin(u)
         app.events.emit("ping", None, u.id, "연결 시험")
         return {"queued": True}
+
+    @route("GET", r"/api/dms/admin/sources")
+    def _sources(req, u, m, qs):
+        d._need_admin(u)
+        return {"items": app.sources.status()}
+
+    @route("POST", r"/api/dms/admin/sources/([^/]+)/sync")
+    def _source_sync(req, u, m, qs):
+        d._need_admin(u)
+        b = req.body(1024)
+        name = urllib.parse.unquote(m.group(1))
+        if name not in app.sources.cfgs:
+            raise DmsError(404, "저장소를 찾을 수 없습니다")
+        return app.sources.sync(name, bool(b.get("dry_run")))
+
+    @route("GET", r"/api/dms/admin/sources/([^/]+)/items")
+    def _source_items(req, u, m, qs):
+        d._need_admin(u)
+        name = urllib.parse.unquote(m.group(1))
+        if name not in app.sources.cfgs:
+            raise DmsError(404, "저장소를 찾을 수 없습니다")
+        return {"items": app.sources.items(name, q1(qs, "status"))}
 
     @route("GET", r"/api/dms/admin/users")
     def _admin_users(req, u, m, qs):

@@ -268,5 +268,63 @@
   },
   "disposal": {
     "allow_self_approval": false
-  }
+  },
+  "sources": [
+    {
+      "name": "본부NAS",
+      "type": "path",
+      "path": "nas_sample",
+      "mode": "reference",
+      "include": [
+        "*.md",
+        "*.docx",
+        "*.hwp",
+        "*.pdf",
+        "*.xlsx"
+      ],
+      "max_mb": 100,
+      "acl": {
+        "depts": [
+          "mice",
+          "finance",
+          "ops"
+        ],
+        "level": 1
+      },
+      "acl_rules": [
+        {
+          "glob": "총무/*",
+          "acl": {
+            "depts": [
+              "finance"
+            ],
+            "level": 1
+          }
+        }
+      ],
+      "schedule_minutes": 60
+    },
+    {
+      "name": "NAS이관예시",
+      "type": "path",
+      "path": "nas_sample",
+      "mode": "migrate",
+      "folder": "NAS이관",
+      "owner": "admin",
+      "doc_type": "GEN",
+      "folder_entries": [
+        {
+          "type": "dept",
+          "id": "mice",
+          "role": "viewer"
+        },
+        {
+          "type": "dept",
+          "id": "ops",
+          "role": "editor"
+        }
+      ],
+      "on_delete": "flag"
+    }
+  ]
 }

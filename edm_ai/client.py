@@ -94,6 +94,12 @@ class EdmClient:
     def comment(self, doc_id: int, text: str) -> dict:
         return self._call("POST", f"/api/docs/{int(doc_id)}/comments", {"text": text})
 
+    def folders(self) -> list[dict]:
+        return self._call("GET", "/api/dms/folders")
+
+    def make_folder(self, parent_id: int | None, name: str) -> dict:
+        return self._call("POST", "/api/dms/folders", {"parent_id": parent_id, "name": name})
+
     def tasks(self) -> dict:
         return self._call("GET", "/api/dms/tasks")
 

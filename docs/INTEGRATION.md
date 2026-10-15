@@ -100,6 +100,26 @@ curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H 
 이벤트: `doc.created, doc.version_added, doc.approved, doc.rejected, doc.deleted, doc.expired, doc.acl_changed, doc.moved, doc.legal_hold, doc.legal_hold_released, approval.requested, access.requested, access.granted, privacy.detected, disposal.completed, ping`.
 전송은 JSON POST이며 헤더 `X-EDM-Timestamp`, `X-EDM-Signature`(= `sha256=HMAC(비밀값, 타임스탬프 + "." + 본문)`), `X-EDM-Event`, `X-EDM-Delivery`(중복 제거용 ID)를 포함합니다. 백그라운드로 최대 3회 재시도(4xx는 재시도 안 함)하며 요청 처리를 지연시키지 않습니다. 기본은 문서 제목을 보내지 않습니다(`include_title`). 비밀값이 16자 미만이면 해당 웹훅은 비활성화됩니다.
 
+## 6. NAS · 파일서버 · FTP · WebDAV 연동 (Wrapsody 식 "가상 중앙화")
+문서를 **옮기지 않고** 흩어진 파일을 한곳에서 검색·AI·열람하거나(**원본 유지**), 문서함으로 **이관**합니다. 관리자 화면 *저장소 연동(NAS)*에서 상태 확인·미리보기·지금 동기화.
+
+```json
+"sources": [
+  {"name": "본부NAS", "type": "path", "path": "\\\\nas01\\share\\문서", "mode": "reference",
+   "include": ["*.docx", "*.hwp", "*.pdf"], "exclude": ["~$*", "*.tmp"], "max_mb": 100,
+   "acl": {"depts": ["mice"], "level": 1}, "acl_rules": [{"glob": "인사/*", "acl": {"roles": ["hr"], "level": 3}}], "schedule_minutes": 60},
+  {"name": "이관NAS", "type": "path", "path": "/mnt/nas", "mode": "migrate", "folder": "NAS이관", "owner": "admin", "doc_type": "GEN",
+   "folder_entries": [{"type": "dept", "id": "mice", "role": "viewer"}], "on_delete": "flag"},
+  {"name": "협력사FTP", "type": "ftp", "host": "ftp.example", "tls": true, "user_env": "FTP_USER", "password_env": "FTP_PASS", "path": "/share"},
+  {"name": "공유WebDAV", "type": "webdav", "url": "https://nas.example/webdav/", "user_env": "DAV_USER", "password_env": "DAV_PASS"}]
+```
+- **경로(path)**: Windows UNC(`\\서버\공유`), 연결된 드라이브, 리눅스 NFS/SMB **마운트 경로**. SMB 프로토콜을 직접 말하지는 않으므로 서버 OS에서 공유를 먼저 연결하세요(읽기 전용 계정 권장).
+- **원본 유지(reference)**: `외부 소스/<이름>/…` 아래에 읽기 전용으로 나타나며 문서를 열면 **항상 원본의 현재 파일**입니다. 접근 권한은 `acl`/`acl_rules` 로 지정(**지정하지 않으면 관리자 전용** — 안전 기본값). FTP·WebDAV는 먼저 로컬 캐시로 **증분 복사**(크기·수정시각)한 뒤 색인합니다.
+- **이관(migrate)**: 파일을 문서함의 정식 문서로 복사(폴더 구조 유지, 소유자·권한·태그·원본경로 기록). 다시 실행하면 **변경된 파일만 새 버전**, 같은 내용(SHA-256)은 중복으로 건너뜁니다. 원본에서 사라진 파일은 `원본 삭제됨` 표시만 하고 문서는 지우지 않습니다. 파일별 결과(오류·용량 초과·차단 형식)가 기록됩니다.
+- **안전장치**: 서버가 꺼져 있거나 접속 실패 시 **색인을 비우지 않고** 마지막 정상 복사본을 계속 사용, 원격 파일명의 `..`·드라이브 문자 제거, 파일 크기·개수·시간 제한, 실행 파일 차단, `~$*`·임시 파일 제외, 개인정보 차단 정책(`dlp.mode=block`) 적용.
+- **PC 동기화 에이전트** `tools/edm_sync.py`: 직원 PC의 폴더를 API 키(write)로 주기 업로드(`--interval`) — 변경분만 전송, 삭제는 하지 않음, `--dry-run` 지원.
+- **미구현/미시험**: SMB/NTFS 권한(ACL) 자동 가져오기, SFTP, 클라우드 스토리지(S3·OneDrive). FTP·WebDAV는 시험용 서버로 검증했고 실제 NAS 제품과의 호환은 현장 확인이 필요합니다.
+
 ## 점검 체크리스트
 1. 조직도 동기화 미리보기 → 경고(미매핑 부서/등급 상한) 해소 → `--apply`
 2. SSO: 한 명의 이메일로 로그인 → `/api/me` 확인 → 등록 안 된 계정은 401 확인

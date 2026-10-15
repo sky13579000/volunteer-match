@@ -11,7 +11,7 @@ from .dbdrivers import connect
 from .gateway import SqlGateway
 from .ingest import ingest_dir
 from .llm import OpenAICompatClient
-from .models import Principal
+from .models import Acl, Principal
 from .store import DocumentStore
 from .vectors import OpenAICompatEmbedder
 
@@ -44,6 +44,8 @@ class App:
         self._users_mtime = 0.0
         self._users_checked = 0.0
         self.reload_users()
+        from .sources import SourceManager
+        self.sources = SourceManager(self)
         from .dms_all import Dms
         from .mailer import Mailer
         smtp = (self.cfg.get("notify") or {}).get("smtp")
@@ -94,11 +96,27 @@ class App:
     def _p(self, rel: str) -> Path:
         return (self.base / rel).resolve()
 
-    def ingest(self) -> dict:
+    def all_roots(self, mirror=False):
+        from .ingest import Root
         d = self.cfg["docs"]
+        manifest = {}
+        mp = self._p(d["manifest"]) if d.get("manifest") else None
+        if mp and mp.exists():
+            manifest = json.loads(mp.read_text("utf-8"))
+        main = Root(self._p(d["root"]), "", manifest.get("rules", []), Acl.from_dict(manifest.get("default", {"roles": ["admin"], "level": 99})))
+        return [main] + self.sources.reference_roots(mirror=mirror)
+
+    def ingest_stats(self, dry_run: bool = False) -> dict:
+        from .ingest import ingest_roots
+        return ingest_roots(self.all_roots(mirror=False), self.store, self.extractor, dry_run=dry_run)
+
+    def ingest(self, mirror=True) -> dict:
+        """Crawl the document root and every reference source. Remote (FTP/WebDAV) mirrors are refreshed OUTSIDE the lock:
+        network transfers must not freeze the web server."""
+        from .ingest import ingest_roots
+        roots = self.all_roots(mirror=mirror)
         with self.lock:
-            stats = ingest_dir(self._p(d["root"]), self._p(d["manifest"]) if d.get("manifest") else None,
-                               self.store, self.extractor)
+            stats = ingest_roots(roots, self.store, self.extractor)
             self.dms.sync_crawled()
             if stats["added"] or stats["pruned"]:
                 self.engine.reload()   # swaps the index only when something changed

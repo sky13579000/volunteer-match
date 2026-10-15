@@ -311,6 +311,18 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.dlg().getByRole('button', { name: '닫기' }).click(); await ad2.waitForSelector('.tbl');
   ok('key list shows the new key without its secret', (await ad2.textContent('#view')).includes('e2e 시험 연동') && !(await ad2.textContent('#view')).includes(keyText));
 
+  // ===== storage connectors (NAS) =====
+  await ad2.hash('#/admin/sources'); await ad2.waitForSelector('.src');
+  ok('storage connector page lists both modes', (await ad2.textContent('#view')).includes('본부NAS') && (await ad2.textContent('#view')).includes('NAS이관예시'));
+  await ad2.locator('.src', { hasText: 'NAS이관예시' }).getByRole('button', { name: '미리보기' }).click(); await ad2.waitForSelector('dialog[open]');
+  ok('dry run reports what would be migrated without changing anything', (await ad2.locator('dialog[open]').textContent()).includes('미리보기입니다'));
+  await ad2.dlg().getByRole('button', { name: '닫기' }).click();
+  await ad2.locator('.src', { hasText: 'NAS이관예시' }).getByRole('button', { name: '지금 동기화' }).click(); await ad2.waitForSelector('dialog[open]');
+  ok('migration creates documents', (await ad2.locator('dialog[open]').textContent()).includes('이관'));
+  await ad2.dlg().getByRole('button', { name: '닫기' }).click();
+  await ad2.hash('#/docs?q=' + encodeURIComponent('비품 관리 대장')); await ad2.waitForSelector('.tbl tbody tr');
+  ok('migrated document is searchable in the repository', (await ad2.textContent('#view')).includes('비품 관리 대장'));
+
   // ===== responsive + dark =====
   const mob = await login('kim', { viewport: { width: 400, height: 800 } });
   for (const h of ['#/dashboard', '#/docs', '#/tasks']) {

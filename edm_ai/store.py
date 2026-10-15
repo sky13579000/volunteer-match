@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS disposal_ledger(
 CREATE TABLE IF NOT EXISTS api_keys(
   id INTEGER PRIMARY KEY, name TEXT, user_id TEXT, key_hash TEXT UNIQUE, prefix TEXT, scope TEXT DEFAULT 'read',
   created_by TEXT, created TEXT, expires TEXT, last_used TEXT, revoked INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS source_runs(
+  id INTEGER PRIMARY KEY, source TEXT, kind TEXT, ts TEXT, ok INTEGER, stats TEXT);
+CREATE TABLE IF NOT EXISTS source_items(
+  source TEXT, rel TEXT, status TEXT, doc_id INTEGER, sha256 TEXT, note TEXT, ts TEXT, PRIMARY KEY(source, rel));
 CREATE TABLE IF NOT EXISTS follows(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
 CREATE TABLE IF NOT EXISTS user_prefs(user_id TEXT PRIMARY KEY, email INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS favorites(user_id TEXT, doc_id INTEGER, ts TEXT, PRIMARY KEY(user_id, doc_id));
@@ -122,6 +126,11 @@ class DocumentStore:
                 "INSERT INTO chunks(doc_id,ord,text,entities) VALUES(?,?,?,?)",
                 [(cur.lastrowid, i, t, json.dumps(sorted(e))) for i, (t, e) in enumerate(pieces)])
         return True
+
+    def would_change(self, source: str, acl: Acl, raw: str) -> bool:
+        sha = hashlib.sha256((PIPELINE_VERSION + raw + json.dumps(acl.to_dict(), sort_keys=True)).encode()).hexdigest()
+        row = self.db.execute("SELECT sha FROM documents WHERE source=?", (source,)).fetchone()
+        return not (row and row[0] == sha)
 
     def prune(self, keep_sources: set[str]) -> int:
         gone = [r[0] for r in self.db.execute("SELECT source FROM documents")

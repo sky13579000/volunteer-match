@@ -325,8 +325,12 @@ class DocsMixin:
         row = self.get_row(p, doc_id, "download")
         pr = self.perms(p, row)
         if row["origin"] == "crawled":
-            path = (self.app._p(self.app.cfg["docs"]["root"]) / row["source"]).resolve()
-            if self.app._p(self.app.cfg["docs"]["root"]).resolve() not in path.parents or not path.is_file():
+            path = self.app.sources.crawled_path(row["source"])
+            if path is None:
+                path = (self.app._p(self.app.cfg["docs"]["root"]) / row["source"]).resolve()
+                if self.app._p(self.app.cfg["docs"]["root"]).resolve() not in path.parents:
+                    path = None
+            if path is None or not path.is_file():
                 raise DmsError(404, "원본 파일을 찾을 수 없습니다")
             data, name = path.read_bytes(), path.name
         else:
