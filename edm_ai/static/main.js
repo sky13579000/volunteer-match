@@ -11,6 +11,7 @@ import "./v-integrations.js";
 import "./v-sources.js";
 import "./v-mail.js";
 import "./v-verify.js";
+import "./v-insight.js";
 import { toggleNotifPopover } from "./v-notif.js";
 import { refreshBell } from "./v-misc.js";
 import { icon } from "./icons.js";
@@ -20,7 +21,7 @@ const NAV = [
   ["문서", [["#/docs", "문서함", "folder"], ["#/docs?favorites=1", "즐겨찾기", "star"], ["#/docs?mine=1", "내가 올린 문서", "user"], ["#/verify", "사본 확인", "check"], ["#/trash", "휴지통", "trash"]]],
   ["업무", [["#/tasks", "결재함", "task", "tasks"], ["#/access", "권한 신청", "key", "access"], ["#/notifications", "알림", "bell"], ["#/calendar", "일정 캘린더", "calendar"], ["#/alerts", "문서↔DB 불일치", "alert"]]],
 ];
-const ADMIN = ["관리", [["#/records", "기록물 관리", "book"], ["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/reports", "리포트", "chart"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/sources", "저장소 연동 (NAS)", "inbox"], ["#/admin/mail", "메일 연동", "mail"], ["#/admin/integrations", "연동 관리", "share"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
+const ADMIN = ["관리", [["#/records", "기록물 관리", "book"], ["#/admin/audit", "감사 로그", "shield"], ["#/admin/types", "문서유형 · 번호 · 보존", "layers"], ["#/admin/reports", "리포트", "chart"], ["#/admin/users", "사용자 · 조직", "users"], ["#/admin/trust", "AI 신뢰성 센터", "shield"], ["#/admin/sources", "저장소 연동 (NAS)", "inbox"], ["#/admin/mail", "메일 연동", "mail"], ["#/admin/integrations", "연동 관리", "share"], ["#/admin/system", "시스템 상태", "settings"], ["#/admin/stats", "현황 · 유지관리", "chart"]]];
 
 const RECORDS = ["기록물", [["#/records", "기록물 관리", "book"]]];
 function buildNav() {

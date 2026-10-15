@@ -2,8 +2,9 @@ import { $, renderMd, avatar, fileTile, menu, relTime, aclEditor, api, confirmDi
 import { folderOptions } from "./v-docs.js";
 import { requestDialog } from "./v-social.js";
 import { icon } from "./icons.js";
+import { insightTab } from "./v-insight.js";
 
-const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["activity", "열람 현황"], ["history", "이력"]];
+const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["activity", "열람 현황"], ["insight", "조항 점검"], ["history", "이력"]];
 const ACTION = { registered: "등록", new_version: "새 버전", restored: "버전 복원", submitted: "결재 요청", approved_step: "결재 승인", rejected: "반려", delegated: "결재 위임",
   workflow_cancelled: "결재 회수", checked_out: "체크아웃", checkout_cancelled: "체크아웃 해제", downloaded: "다운로드", acl_changed: "권한 변경", access_requested: "권한 신청", access_granted: "권한 승인", access_denied: "권한 거절", meta_changed: "정보 변경", moved: "이동",
   deleted: "삭제", restored_from_trash: "휴지통 복원", legal_hold_on: "법적 보류", legal_hold_off: "법적 보류 해제", expired: "만료", expiry_changed: "만료일 변경", commented: "댓글",
@@ -57,7 +58,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     return;
   }
   const alerts = d.analysis?.findings || [];
-  const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, activity: activityTab, history: historyTab }[tab] || infoTab;
+  const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, activity: activityTab, insight: insightTab, history: historyTab }[tab] || infoTab;
   const panel = el("div", { role: "tabpanel" });
   const priv = d.privacy?.findings?.length ? el("div", { class: "card privacy-banner sec" }, icon("shield", 20), el("div", {}, el("b", {}, "개인정보가 포함된 것으로 검출되었습니다"),
     el("div", { class: "chips" }, d.privacy.findings.map((f) => pill(`${f.label} ${f.count}건`, f.severity === "high" ? "bad" : f.severity === "medium" ? "warn" : ""))),
@@ -71,7 +72,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     } }, icon("eye", 14), "원문 보기 (사유 필수)"))) : "";
   view.replaceChildren(head, priv,
     alerts.length ? el("div", { class: "card sec" }, el("b", { class: "bad" }, `업무 DB와 불일치 ${alerts.length}건`), alerts.map((f) => el("p", { class: "flush" }, pill(f.severity === "high" ? "높음" : "중간", f.severity === "high" ? "bad" : "warn"), " " + f.message))) : "",
-    el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share")).filter(([t]) => t !== "activity" || can("edit"))
+    el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share")).filter(([t]) => t !== "activity" || can("edit")).filter(([t]) => t !== "insight" || d.origin === "managed" && d.doc_type === "CT")
       .map(([t, l]) => el("button", { role: "tab", "aria-selected": String(t === tab), onclick: () => goTab(t) }, l + (t === "comments" && d.comment_count ? ` (${d.comment_count})` : "")))),
     panel);
   panel.append(await body(d, reload));
@@ -220,7 +221,8 @@ async function versionsTab(d, reload) {
     el("div", { class: "row sec" }, el("button", { onclick: async () => {
       if (!a || !b) return toast("A와 B 버전을 선택하세요", "bad");
       const r = await api(`/api/docs/${d.id}/diff?a=${a}&b=${b}`);
-      out.replaceChildren(el("p", {}, pill(`추가 ${r.added}줄`, "ok"), " ", pill(`삭제 ${r.removed}줄`, r.removed ? "bad" : ""), r.same ? " 내용이 같습니다" : "", r.note ? " " + r.note : ""),
+      const sm = await api(`/api/docs/${d.id}/version-summary?a=${a}&b=${b}`).catch(() => null);
+      out.replaceChildren(sm?.points?.length ? el("div", { class: "card", id: "vsum" }, el("b", {}, "변경 요약"), el("ul", {}, sm.points.map((x) => el("li", {}, x))), el("p", { class: "hint" }, sm.note)) : "", el("p", {}, pill(`추가 ${r.added}줄`, "ok"), " ", pill(`삭제 ${r.removed}줄`, r.removed ? "bad" : ""), r.same ? " 내용이 같습니다" : "", r.note ? " " + r.note : ""),
         el("div", { class: "diff" }, r.lines.map((l) => el("div", { class: l.tag }, (l.tag === "add" ? "+ " : l.tag === "del" ? "- " : "  ") + l.text))), r.truncated ? el("p", { class: "hint" }, "일부만 표시했습니다") : "");
     } }, "A ↔ B 비교")), out);
 }

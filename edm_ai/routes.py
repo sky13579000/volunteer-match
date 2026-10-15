@@ -487,6 +487,34 @@ def build_routes(app):
             raise DmsError(404, "저장소를 찾을 수 없습니다")
         return {"items": app.sources.items(name, q1(qs, "status"))}
 
+    @route("GET", r"/api/dms/admin/trust")
+    def _trust(req, u, m, qs):
+        return d.trust_status(u)
+
+    @route("POST", r"/api/dms/admin/trust/run")
+    def _trust_run(req, u, m, qs):
+        return d.trust_run(u)
+
+    @route("GET", r"/api/dms/nl-search")
+    def _nl(req, u, m, qs):
+        return d.nl_search(u, q1(qs, "q", ""))
+
+    @route("GET", r"/api/docs/(\d+)/clauses")
+    def _clauses(req, u, m, qs):
+        return d.clause_check(u, i(m))
+
+    @route("GET", r"/api/docs/(\d+)/version-summary")
+    def _vsum(req, u, m, qs):
+        return d.version_summary(u, i(m), q1(qs, "a"), q1(qs, "b"))
+
+    @route("GET", r"/api/dms/admin/knowledge-gaps")
+    def _gaps(req, u, m, qs):
+        return d.knowledge_gaps(u, q1(qs, "days", 90))
+
+    @route("POST", r"/api/dms/draft")
+    def _draft(req, u, m, qs):
+        return d.draft_from_evidence(u, req.body(4096).get("topic"))
+
     @route("POST", r"/api/dms/verify-copy")
     def _verify_copy(req, u, m, qs):
         b = req.body(big())

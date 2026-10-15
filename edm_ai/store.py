@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS disposal_items(
 CREATE TABLE IF NOT EXISTS disposal_ledger(
   id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
   retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS trust_runs(
+  id INTEGER PRIMARY KEY, ts TEXT, by TEXT, cases INTEGER, recall REAL, mrr REAL, leaks INTEGER, failures TEXT, answers TEXT);
 CREATE TABLE IF NOT EXISTS doc_activity(
   id INTEGER PRIMARY KEY, doc_id INTEGER, user_id TEXT, action TEXT, ver INTEGER, out_sha TEXT, ts TEXT);
 CREATE INDEX IF NOT EXISTS ix_act_doc ON doc_activity(doc_id, id);

@@ -1,5 +1,6 @@
 import { $, STATUS, api, aclEditor, avatar, confirmDialog, dialog, el, empty, fail, field, fileTile, fileToB64, fmtDate, fmtDay, fmtNum, go, menu, pill, relTime, route, saveBlob, state, statusPill, table, toast, typeName, userName } from "./core.js";
 import { icon } from "./icons.js";
+import { draftDialog, nlDialog } from "./v-insight.js";
 
 // ---------------- helpers ----------------
 export function folderOptions(tree, { registerable = false } = {}) {
@@ -169,7 +170,7 @@ route(/^\/docs$/, async (view, _m, params) => {
   view.replaceChildren(
     el("div", { class: "page-h" }, el("h1", {}, titleText), el("span", { class: "count-pill" }, `${fmtNum(res.total)}건`), el("span", { class: "grow" }),
       el("button", { id: "btn-tpl", onclick: () => go("#/new") }, icon("file", 16), "양식으로 작성"),
-      menu("더 보기", [{ label: "ZIP 일괄 등록", icon: "upload", run: () => importDialog(cur || 1) }, { label: curF ? "폴더 관리" : "새 폴더", icon: "folder", run: () => folderDialog(tree, cur) }]),
+      menu("더 보기", [{ label: "자연어로 찾기", icon: "search", run: () => nlDialog() }, { label: "근거 기반 초안", icon: "sparkles", run: () => draftDialog(cur) }, { label: "ZIP 일괄 등록", icon: "upload", run: () => importDialog(cur || 1) }, { label: curF ? "폴더 관리" : "새 폴더", icon: "folder", run: () => folderDialog(tree, cur) }]),
       el("button", { class: "primary", id: "btn-new", onclick: () => registerDialog(cur || 1).catch(fail) }, icon("plus", 16), "새 문서")),
     el("div", { class: "browser" }, renderTree(tree, cur, (id) => nav({ folder: id || "", favorites: "", mine: "" })),
       el("div", { class: "stack" },

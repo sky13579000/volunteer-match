@@ -314,6 +314,15 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await kim.setInputFiles('#verify-file', FILES + '/contract.md'); await kim.click('#verify-go'); await kim.waitForSelector('#verify-out .card');
   ok('copy check finds the uploaded contract among the versions', !(await kim.textContent('#verify-out')).includes('찾을 수 없습니다') && (await kim.textContent('#verify-out')).includes('계약 초안'));
 
+  await ad2.hash('#/admin/trust'); await ad2.waitForSelector('#trust-run');
+  await ad2.click('#trust-run'); await ad2.waitForSelector('.statrow');
+  ok('AI trust center runs the leak test with zero leaks', (await ad2.textContent('#view')).includes('접근 제한 정보 노출') && (await ad2.textContent('.statrow .stat b')).trim() === '0');
+  await kim.hash('#/docs'); await kim.waitForSelector('.tbl tbody tr');
+  await kim.getByRole('button', { name: '더 보기' }).click(); await kim.getByRole('menuitem', { name: '자연어로 찾기' }).click(); await kim.waitForSelector('#nl-q');
+  await kim.fill('#nl-q', '내가 올린 계약서 지체상금'); await kim.click('#nl-go'); await kim.waitForSelector('#nl-out .chip');
+  ok('natural-language search shows the understood conditions', (await kim.textContent('#nl-out')).includes('내가 올린 문서') && (await kim.textContent('#nl-out')).includes('유형'));
+  await kim.keyboard.press('Escape');
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');
