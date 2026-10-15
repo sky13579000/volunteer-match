@@ -282,7 +282,17 @@ async function shareTab(d, reload) {
             el("input", { id: "sh-url", readonly: true, value: url, onfocus: (e) => e.target.select() }), el("p", { class: "hint" }, `유효기간 ${fmtDay(r.expires)} · ${r.perm === "download" ? "다운로드 허용" : "보기만"}${r.password ? " · 비밀번호 필요" : ""}`)),
             [{ label: "복사", run: async () => { try { await navigator.clipboard.writeText(url); toast("복사했습니다"); } catch { $("#sh-url").select(); toast("선택했습니다. Ctrl+C 로 복사하세요"); } return false; } }, { label: "닫기", primary: true }]);
           reload();
-        } catch (e) { fail(e); } } }, "링크 만들기"))),
+        } catch (e) { fail(e); } } }, "링크 만들기"),
+      el("button", { id: "sh-mail", onclick: async () => {
+        const to = el("input", { id: "sm-to", placeholder: "a@example.com, b@example.com" }), msg = el("input", { id: "sm-msg", placeholder: "전할 말 (선택)" });
+        const ok = await dialog("메일로 링크 보내기", () => el("div", { class: "stack" }, el("p", { class: "hint" }, "파일은 첨부하지 않고, 받는 사람마다 별도의 링크를 보냅니다. 위의 유효 기간·권한·비밀번호 설정이 적용됩니다."), field("받는 사람 (쉼표로 구분)", to), field("메시지", msg)),
+          [{ label: "취소", value: false }, { label: "보내기", primary: true, run: async () => {
+            try {
+              const r = await api(`/api/docs/${d.id}/send-link`, { method: "POST", body: { to: to.value.split(/[,;\s]+/).filter(Boolean), message: msg.value, days: Number(days.value), max_downloads: Number(maxdl.value), password: pw.value || null, perm: perm.value } });
+              toast(`${r.sent.length}명에게 보냈습니다`); return true;
+            } catch (e) { fail(e); return false; } } }]);
+        if (ok) reload();
+      } }, icon("send", 16), "메일로 보내기"))),
     shares.length ? table(["#", "만든 사람", "만든 날", "만료", "권한", "열람", "다운로드", "상태", ""], shares.map((s) => [s.id, userName(s.created_by), fmtDay(s.created), fmtDay(s.expires), s.perm === "download" ? "다운로드" : "보기", s.views,
       `${s.downloads}${s.max_downloads ? " / " + s.max_downloads : ""}`, s.revoked ? pill("폐지", "bad") : s.expired ? pill("만료") : pill(s.has_password ? "사용 중 (비밀번호)" : "사용 중", "ok"),
       !s.revoked && !s.expired ? el("button", { class: "sm danger", onclick: async () => { await api(`/api/docs/${d.id}/shares/${s.id}`, { method: "DELETE" }); toast("폐지했습니다"); reload(); } }, "폐지") : ""])) : empty("만든 링크가 없습니다"));
