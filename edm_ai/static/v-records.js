@@ -2,7 +2,7 @@ import { api, avatar, confirmDialog, dialog, el, empty, fail, field, fileToB64, 
 import { icon } from "./icons.js";
 
 export const yearsLabel = (y) => (y >= 99 ? "영구" : y > 0 ? `${y}년` : "없음");
-const TABS = [["disposal", "폐기 심의", "trash"], ["classes", "분류표", "layers"], ["ledger", "폐기 대장", "book"], ["privacy", "개인정보 점검", "shield"], ["registry", "개인정보파일 대장", "key"], ["unmask", "원문 열람 기록", "eye"]];
+const TABS = [["disposal", "폐기 심의", "trash"], ["classes", "분류표", "layers"], ["ledger", "폐기 대장", "book"], ["privacy", "개인정보 점검", "shield"], ["registry", "개인정보파일 대장", "key"], ["unmask", "원문 열람 기록", "eye"], ["dups", "중복 문서", "layers"]];
 const SEV = { high: ["높음", "bad"], medium: ["중간", "warn"], low: ["낮음", ""] };
 const STATE = { pending: ["심의 중", "info"], approved: ["승인·폐기", "ok"], rejected: ["반려", "bad"] };
 
@@ -11,7 +11,7 @@ route(/^\/records$/, async (view, _m, params) => {
   const body = el("div", { class: "sec" });
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "기록물 관리"), el("span", { class: "hint" }, "분류·보존·폐기·개인정보. 담당자는 번호·제목 등 메타데이터만 보며 본문은 열람하지 않습니다.")),
     el("div", { class: "tabs", role: "tablist" }, TABS.map(([t, l, ic]) => el("button", { role: "tab", "aria-selected": String(t === tab), onclick: () => go("#/records?tab=" + t) }, icon(ic, 15), l))), body);
-  body.append(await { disposal: disposalTab, classes: classesTab, ledger: ledgerTab, privacy: privacyTab, registry: registryTab, unmask: unmaskTab }[tab]());
+  body.append(await { disposal: disposalTab, classes: classesTab, ledger: ledgerTab, privacy: privacyTab, registry: registryTab, unmask: unmaskTab, dups: dupsTab }[tab]());
 });
 
 // ---------- disposal ----------
@@ -129,4 +129,13 @@ async function unmaskTab() {
   const { items } = await api("/api/dms/records/unmask-log");
   return el("div", { class: "stack" }, el("div", { class: "card" }, items.length ? table(["일시", "열람자", "문서번호", "제목", "사유"], items.map((r) => [fmtDate(r.ts), r.user_name, el("span", { class: "ref" }, r.doc_no), r.title || el("span", { class: "hint" }, "(열람 권한 없음)"), r.reason])) : empty("원문 열람 기록이 없습니다", "eye")),
     el("p", { class: "hint" }, "문서 화면에서는 개인정보가 가려져 보입니다. 원문 보기는 사유를 입력해야 하며 이 목록과 감사 로그에 남고 문서 소유자에게 알림이 갑니다."));
+}
+
+// ---------- duplicate documents ----------
+async function dupsTab() {
+  const r = await api("/api/dms/duplicates");
+  return el("div", { class: "stack" }, el("div", { class: "row" }, pill(`중복 묶음 ${r.groups.length}`, r.groups.length ? "warn" : "ok"), pill(`낭비 ${(r.wasted_bytes / 1048576).toFixed(1)} MB`), el("span", { class: "grow" })),
+    r.groups.length ? r.groups.map((g) => el("div", { class: "card" }, el("div", { class: "row" }, el("b", {}, `${g.count}개 동일 파일`), el("span", { class: "hint" }, `${(g.size / 1024).toFixed(0)} KB · ${g.sha256.slice(0, 12)}…`)),
+      table(["문서번호", "제목", "폴더", "소유자", "등록일"], g.items.map((i) => [el("span", { class: "ref" }, i.doc_no), i.title || el("span", { class: "hint" }, "(열람 권한 없음)"), i.folder, userName(i.owner), i.created])))) : el("div", { class: "card" }, empty("내용이 같은 문서가 없습니다", "check")),
+    el("p", { class: "hint" }, r.note));
 }

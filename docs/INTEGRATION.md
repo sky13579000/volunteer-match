@@ -100,6 +100,9 @@ curl -s https://edm.example/api/adapters/groupware -H "X-EDM-Timestamp: $TS" -H 
 이벤트: `doc.created, doc.version_added, doc.approved, doc.rejected, doc.deleted, doc.expired, doc.acl_changed, doc.moved, doc.legal_hold, doc.legal_hold_released, approval.requested, access.requested, access.granted, privacy.detected, disposal.completed, ping`.
 전송은 JSON POST이며 헤더 `X-EDM-Timestamp`, `X-EDM-Signature`(= `sha256=HMAC(비밀값, 타임스탬프 + "." + 본문)`), `X-EDM-Event`, `X-EDM-Delivery`(중복 제거용 ID)를 포함합니다. 백그라운드로 최대 3회 재시도(4xx는 재시도 안 함)하며 요청 처리를 지연시키지 않습니다. 기본은 문서 제목을 보내지 않습니다(`include_title`). 비밀값이 16자 미만이면 해당 웹훅은 비활성화됩니다.
 
+> **화면에서 연결하기 (v0.7)**: 관리 ▸ 저장소 연동 / 메일 연동 화면의 **"연결 추가"** 로 NAS 경로(UNC·드라이브·마운트)·FTP·WebDAV·IMAP 계정을 직접 등록하고 **"연결 테스트"** 로 확인할 수 있습니다. 설정은 `connections.json`(config.json 옆, 파일 권한 600)에 저장되며 비밀번호는 화면·API에 다시 표시되지 않습니다. 비밀번호를 파일에 두고 싶지 않으면 config.json 에서 `user_env`/`password_env`(환경변수)를 쓰세요. 아래 JSON 설명은 같은 항목의 파일 방식입니다.
+> 윈도우 NAS 팁: 서버 PC에서 탐색기로 그 경로가 열려야 합니다. 서비스/예약 작업으로 실행한다면 그 계정이 해당 공유에 접근 권한이 있어야 하고, 네트워크 드라이브(Z:)는 로그인 세션에만 연결되므로 UNC 경로(`\\서버\공유`)를 권장합니다.
+
 ## 6. NAS · 파일서버 · FTP · WebDAV 연동 (Wrapsody 식 "가상 중앙화")
 문서를 **옮기지 않고** 흩어진 파일을 한곳에서 검색·AI·열람하거나(**원본 유지**), 문서함으로 **이관**합니다. 관리자 화면 *저장소 연동(NAS)*에서 상태 확인·미리보기·지금 동기화.
 

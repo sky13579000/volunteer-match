@@ -8,7 +8,7 @@
 ```bash
 ./run-demo.sh            # Windows: run-demo.bat   (또는 python3 -m edm_ai demo)
 ```
-샘플 데이터를 만들고 서버를 띄운 뒤 브라우저를 엽니다. **터미널에 크게 찍히는 주소**(기본 http://127.0.0.1:8787, 사용 중이면 다음 빈 포트)를 여세요.
+샘플 데이터를 만들고 서버를 띄운 뒤 브라우저를 엽니다. **터미널에 크게 찍히는 주소**(기본 http://127.0.0.1:9100, 사용 중이면 다음 빈 포트)를 여세요.
 - 첫 줄에 `ICC JEJU 문서·AI 플랫폼 v0.7.0`, 브라우저 왼쪽 아래에도 같은 버전이 보여야 최신입니다.
 - 이전 버전이 8080에 떠 있으면 새 데모가 **경고를 출력**하고 다른 포트를 씁니다(옛 서버는 `Ctrl+C` 로 끄세요).
 - `--reset` 은 데모 데이터를 깨끗이 다시 만들고, `--port N` 은 시작 포트, `--no-browser` 는 브라우저 자동 열기를 끕니다.
@@ -24,7 +24,7 @@
 python3 examples/demo/build_demo.py                      # 데모 ERP DB 생성 + 문서 수집
 python3 -m edm_ai.cli -c examples/demo/config.json ask -u kim  "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"
 python3 -m edm_ai.cli -c examples/demo/config.json ask -u park "제주관광공사 MICE 위크 계약 금액과 납기 지연 이슈는?"   # 재무: 마진율·원가문서·청구까지
-python3 -m edm_ai.cli -c examples/demo/config.json serve --demo-login   # http://127.0.0.1:8787
+python3 -m edm_ai.cli -c examples/demo/config.json serve --demo-login   # http://127.0.0.1:9100
 python3 -m unittest discover -s tests
 python3 -m edm_ai.cli -c examples/demo/config.json eval examples/demo/golden.json   # 정확도 + 권한 누출(0이어야 함) 평가
 EDM_AI_SECRET=<16자 이상> python3 -m edm_ai.cli -c cfg.json token -u kim            # 서명 토큰 (auth.mode=token)

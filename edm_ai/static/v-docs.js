@@ -23,7 +23,24 @@ export async function registerDialog(defaultFolder = 1) {
   const [tree, classRes] = await Promise.all([api("/api/dms/folders"), api("/api/dms/classifications")]);
   const opts = folderOptions(tree, { registerable: true });
   const cls = el("select", { id: "f-class", "aria-label": "기록물 분류" }, [el("option", { value: "" }, "(분류 없음 — 문서유형 기준)"), ...classRes.items.filter((c) => c.parent || c.retention_years).map((c) => el("option", { value: c.code }, `${c.code} ${c.name} · 보존 ${c.retention_years >= 99 ? "영구" : c.retention_years ? c.retention_years + "년" : "-"}`))]);
-  const file = el("input", { type: "file", id: "f-file", required: true, "aria-label": "파일" });
+  const sugg = el("div", { class: "hint", id: "f-sugg" });
+  const file = el("input", { type: "file", id: "f-file", required: true, "aria-label": "파일", onchange: async () => {
+    sugg.replaceChildren();
+    const f0 = file.files[0];
+    if (!f0 || f0.size > 20 * 1048576) return;
+    try {
+      const r = await api("/api/dms/suggest", { method: "POST", body: { filename: f0.name, content_b64: await fileToB64(f0) } });
+      const parts = [r.doc_type ? `유형 ${typeName(r.doc_type)}` : "", r.class ? `분류 ${r.class.code} ${r.class.name}` : "", r.tags.length ? `태그 ${r.tags.join(", ")}` : ""].filter(Boolean);
+      if (!parts.length) return;
+      sugg.replaceChildren("자동 제안: " + parts.join(" · ") + " ", el("button", { type: "button", class: "sm", id: "f-sugg-apply", onclick: () => {
+        if (r.doc_type) { type.value = r.doc_type; type.dispatchEvent(new Event("change")); }
+        if (r.class) cls.value = r.class.code;
+        if (r.tags.length && !tags.value) tags.value = r.tags.join(", ");
+        if (!title.value && r.title) title.value = r.title;
+        sugg.replaceChildren("제안을 적용했습니다.");
+      } }, "적용"));
+    } catch { /* suggestions are optional */ }
+  } });
   const title = el("input", { id: "f-title", placeholder: "비워 두면 파일 내용/이름에서 가져옵니다" });
   const type = typeSelect();
   const typeHint = el("div", { class: "hint" });
@@ -42,7 +59,7 @@ export async function registerDialog(defaultFolder = 1) {
   editor.hidden = true;
   custom.addEventListener("change", () => (editor.hidden = false)); inherit.addEventListener("change", () => (editor.hidden = true));
   return dialog("새 문서 등록", () => el("div", {},
-    field("파일", file), field("제목", title), el("div", { class: "grid2" }, field("문서유형", type), field("폴더", folder)), typeHint, cfHost,
+    field("파일", file), sugg, field("제목", title), el("div", { class: "grid2" }, field("문서유형", type), field("폴더", folder)), typeHint, cfHost,
     el("div", { class: "grid2" }, field("태그", tags), field("보안등급 (본인 L" + state.me.level + " 이하)", level)),
     field("기록물 분류 (선택)", cls), field("만료일 (선택)", exp), field("설명", desc),
     el("label", {}, "접근 권한"),

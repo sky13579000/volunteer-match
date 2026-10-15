@@ -40,11 +40,15 @@ class MailIngest:
     def __init__(self, app):
         self.app = app
         self.cfgs = {}
-        for c in (app.cfg.get("mail") or {}).get("imap", []):
+        self.running: set = set()
+        self.reload()
+
+    def reload(self):
+        self.cfgs = {}
+        for c in (self.app.cfg.get("mail") or {}).get("imap", []):
             if not c.get("name") or not c.get("host"):
                 raise SystemExit("mail.imap: name and host are required")
             self.cfgs[c["name"]] = c
-        self.running: set = set()
 
     # ---------------- helpers ----------------
     def _connect(self, c):
@@ -55,6 +59,7 @@ class MailIngest:
             m = imaplib.IMAP4(c["host"], port, timeout=60)
         user = os.environ.get(c.get("user_env", ""), "") if c.get("user_env") else c.get("user", "")
         pw = os.environ.get(c.get("password_env", ""), "") if c.get("password_env") else c.get("password", "")
+        m._encoding = "utf-8"
         m.login(user, pw)
         return m
 

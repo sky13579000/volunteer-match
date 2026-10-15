@@ -44,6 +44,9 @@ class App:
         self._users_mtime = 0.0
         self._users_checked = 0.0
         self.reload_users()
+        from .connections import Connections
+        self.connections = Connections(self)
+        self.connections.merge_into(self.cfg)
         from .mailbox import MailIngest
         self.mailbox = MailIngest(self)
         from .backups import BackupScheduler

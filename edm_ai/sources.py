@@ -72,14 +72,18 @@ class SourceManager:
     def __init__(self, app):
         self.app = app
         self.cfgs: dict[str, dict] = {}
-        for c in app.cfg.get("sources", []) or []:
-            self._validate(c)
-            self.cfgs[c["name"]] = c
+        self.reload()
         self.cache_dir = Path(app.store.path).resolve().parent / "source_cache" if app.store.path != ":memory:" else Path(os.environ.get("TMPDIR", "/tmp")) / "edm_source_cache"
         self.running: dict[str, float] = {}
         self._lock = threading.Lock()
 
     # ---------------- config ----------------
+    def reload(self):
+        self.cfgs = {}
+        for c in self.app.cfg.get("sources", []) or []:
+            self._validate(c)
+            self.cfgs[c["name"]] = c
+
     @staticmethod
     def _validate(c: dict):
         if not NAME_RE.fullmatch(str(c.get("name", ""))):

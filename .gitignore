@@ -6,3 +6,4 @@ examples/demo/workspace/
 examples/demo/docs/uploads/
 dist/
 examples/demo/backups/
+examples/demo/connections.json

@@ -334,6 +334,25 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.waitForTimeout(900);
   ok('backup runs and is verified', (await ad2.textContent('#view')).includes('성공') && (await ad2.textContent('#view')).includes('평가판'));
 
+  await ad2.hash('#/admin/sources'); await ad2.waitForSelector('#src-add');
+  await ad2.click('#src-add'); await ad2.waitForSelector('#cs-name');
+  await ad2.fill('#cs-name', 'e2eNAS'); await ad2.fill('#cs-path', 'nas_sample'); await ad2.dlg().getByRole('button', { name: '연결 테스트' }).click();
+  await ad2.waitForSelector('#cs-result .pill');
+  ok('NAS connection test succeeds from the screen', (await ad2.textContent('#cs-result')).includes('성공') && (await ad2.textContent('#cs-result')).includes('파일'));
+  await ad2.fill('#cs-path', 'nas_없음'); await ad2.dlg().getByRole('button', { name: '연결 테스트' }).click(); await ad2.waitForTimeout(700);
+  ok('wrong NAS path is reported with a hint', (await ad2.textContent('#cs-result')).includes('실패'));
+  await ad2.keyboard.press('Escape');
+  await ad2.hash('#/admin/mail'); await ad2.waitForSelector('#mail-add');
+  await ad2.click('#mail-add'); await ad2.waitForSelector('#cm-host');
+  ok('mail account dialog opens with connection test', (await ad2.dlg().textContent()).includes('연결 테스트'));
+  await ad2.keyboard.press('Escape');
+
+  await ad2.hash('#/dashboard'); await ad2.waitForSelector('#nt-new');
+  await ad2.click('#nt-new'); await ad2.waitForSelector('#nt-title'); await ad2.fill('#nt-title', 'e2e 공지 점검'); await ad2.dlg().getByRole('button', { name: '등록' }).click(); await ad2.waitForTimeout(800);
+  ok('announcement appears on the dashboard', (await ad2.textContent('#notices')).includes('e2e 공지 점검'));
+  await ad2.hash('#/records?tab=dups'); await ad2.waitForSelector('#view .card');
+  ok('duplicate documents tab renders', (await ad2.textContent('#view')).includes('중복'));
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');

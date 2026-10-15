@@ -7,7 +7,7 @@ const docLink = (d, label) => el("button", { class: "link", onclick: () => open(
 
 // ---------------- dashboard ----------------
 route(/^\/dashboard$/, async (view) => {
-  const [d, feed, follows] = await Promise.all([api("/api/dms/dashboard"), api("/api/dms/activity?limit=8").catch(() => ({ items: [] })), api("/api/dms/follows").catch(() => ({ items: [] }))]);
+  const [d, feed, follows, notices] = await Promise.all([api("/api/dms/dashboard"), api("/api/dms/activity?limit=8").catch(() => ({ items: [] })), api("/api/dms/follows").catch(() => ({ items: [] })), api("/api/dms/announcements").catch(() => ({ items: [] }))]);
   const c = d.counts;
   const ACT = { registered: "등록했습니다", new_version: "새 버전을 올렸습니다", restored: "이전 버전을 복원했습니다", submitted: "결재를 요청했습니다", approved_step: "결재를 승인했습니다", rejected: "반려했습니다",
     commented: "댓글을 남겼습니다", moved: "문서를 이동했습니다", acl_changed: "권한을 변경했습니다", meta_changed: "정보를 수정했습니다", deleted: "삭제했습니다", expired: "만료되었습니다", checked_out: "체크아웃했습니다", legal_hold_on: "법적 보류를 지정했습니다", legal_hold_off: "법적 보류를 해제했습니다", access_requested: "접근 권한을 신청했습니다", access_granted: "접근 권한을 승인했습니다", access_denied: "접근 권한 신청을 거절했습니다",
@@ -22,6 +22,7 @@ route(/^\/dashboard$/, async (view) => {
     el("section", { class: "welcome" }, el("h1", {}, `${greet}, ${state.me.name}님`), el("p", {}, todo),
       el("div", { class: "row" }, el("button", { class: "primary", onclick: () => registerDialog(1).catch(fail) }, icon("plus", 16), "새 문서 등록"),
         el("button", { onclick: () => go("#/new") }, icon("file", 16), "양식으로 작성"), el("button", { onclick: () => go("#/chat") }, icon("sparkles", 16), "AI에게 질문"), el("button", { onclick: () => go("#/docs") }, icon("folder", 16), "문서함 열기"))),
+    noticeCard(notices.items),
     el("div", { class: "kpis" }, kpi(c.readable, "열람 가능한 문서", "folder", false, "#/docs"), kpi(c.mine, "내가 올린 문서", "user", false, "#/docs?mine=1"), kpi(c.drafts, "작성 중", "edit", false, "#/docs?mine=1&status=draft"),
       kpi(c.in_review, "결재 진행 중", "clock", false, "#/docs?mine=1&status=in_review"), kpi(c.tasks, "내가 처리할 결재", "task", true, "#/tasks"), kpi(c.expiring_soon, "만료 임박", "alert", true, "#/docs?mine=1"), kpi(c.unread, "읽지 않은 알림", "bell", true, "#/notifications")),
     el("div", { class: "grid2 sec" },
@@ -70,7 +71,7 @@ route(/^\/trash$/, async (view) => {
 route(/^\/notifications$/, async (view) => {
   const n = await api("/api/dms/notifications");
   const prefs = await api("/api/dms/prefs");
-  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"], cc_notice: ["참조", ""] };
+  const KIND = { approval_request: ["결재 요청", "info"], approved: ["승인", "ok"], rejected: ["반려", "bad"], comment: ["댓글", ""], mention: ["언급", "info"], expiring: ["만료 예정", "warn"], expired: ["만료", "bad"], cancelled: ["회수", ""], follow_update: ["구독 문서", "info"], access_request: ["권한 신청", "warn"], access_granted: ["권한 승인", "ok"], access_denied: ["권한 거절", "bad"], privacy_alert: ["개인정보", "bad"], disposal_request: ["폐기 신청", "warn"], disposal_result: ["폐기 결과", "info"], cc_notice: ["참조", ""], notice: ["공지", "info"] };
   view.replaceChildren(el("div", { class: "page-h" }, el("h1", {}, "알림"), el("span", { class: "grow" }),
     prefs.email_available ? el("label", { class: "inline" }, el("input", { type: "checkbox", id: "pref-email", checked: prefs.email, onchange: async (e) => { try { await api("/api/dms/prefs", { method: "PUT", body: { email: e.target.checked } }); toast(e.target.checked ? "메일 알림을 켰습니다" : "메일 알림을 껐습니다"); } catch (x) { fail(x); } } }), "메일로도 받기") : "",
     el("button", { onclick: async () => { await api("/api/dms/notifications/read", { method: "POST", body: {} }); go("#/notifications"); await refreshBell(); } }, "모두 읽음")),
@@ -180,3 +181,16 @@ route(/^\/admin\/stats$/, async (view) => {
     el("div", { class: "card sec" }, el("h3", {}, "유지관리"), el("p", { class: "hint" }, "만료일이 지난 문서를 만료 처리하고(검색·AI에서 본문 제외), 만료 예정 알림을 보내고, 보존기간이 끝난 오래된 휴지통 문서를 영구 삭제합니다. 서버는 주기적으로 자동 실행합니다."),
       el("button", { class: "primary", id: "run-maint", onclick: async () => { try { const r = await api("/api/dms/admin/maintenance", { method: "POST", body: {} }); toast(`만료 ${r.expired} · 예정 알림 ${r.warned} · 영구삭제 ${r.purged}`); } catch (e) { fail(e); } } }, "지금 실행")));
 });
+
+function noticeCard(items) {
+  const post = async () => {
+    const title = el("input", { id: "nt-title", placeholder: "제목" }), body = el("textarea", { id: "nt-body", placeholder: "내용 (선택)" }), pin = el("input", { type: "checkbox", id: "nt-pin" }), exp = el("input", { type: "date", id: "nt-exp" });
+    await dialog("공지 등록", () => el("div", {}, field("제목", title), field("내용", body), field("게시 종료일 (선택)", exp), el("label", { class: "inline" }, pin, "상단 고정")),
+      [{ label: "취소", value: false }, { label: "등록", primary: true, run: async () => { await api("/api/dms/admin/announcements", { method: "POST", body: { title: title.value, body: body.value, pinned: pin.checked, expires: exp.value || null } }); toast("등록했습니다"); go("#/dashboard"); } }]);
+  };
+  if (!items.length && !state.me.is_admin) return "";
+  return el("div", { class: "card sec", id: "notices" }, el("div", { class: "row" }, el("h3", { class: "flush" }, icon("bell", 15), "공지사항"), el("span", { class: "grow" }),
+    state.me.is_admin ? el("button", { class: "sm", id: "nt-new", onclick: () => post().catch(fail) }, icon("plus", 14), "공지 등록") : ""),
+    items.length ? el("div", { class: "stack" }, items.map((n) => el("div", { class: "notice" }, el("div", { class: "row" }, n.pinned ? pill("고정", "warn") : "", el("b", {}, n.title), el("span", { class: "grow" }), el("span", { class: "hint" }, fmtDay(n.created)),
+      state.me.is_admin ? el("button", { class: "sm danger", onclick: async () => { await api(`/api/dms/admin/announcements/${n.id}`, { method: "DELETE" }); go("#/dashboard"); } }, "삭제") : ""), n.body ? el("p", { class: "flush hint" }, n.body) : ""))) : el("p", { class: "hint" }, "등록된 공지가 없습니다."));
+}

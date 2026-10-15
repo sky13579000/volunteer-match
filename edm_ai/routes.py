@@ -518,6 +518,70 @@ def build_routes(app):
             raise DmsError(404, "저장소를 찾을 수 없습니다")
         return {"items": app.sources.items(name, q1(qs, "status"))}
 
+    @route("GET", r"/api/dms/announcements")
+    def _notices(req, u, m, qs):
+        return {"items": d.announcements(u)}
+
+    @route("POST", r"/api/dms/admin/announcements")
+    def _notice_new(req, u, m, qs):
+        return d.save_announcement(u, req.body(8192))
+
+    @route("DELETE", r"/api/dms/admin/announcements/(\d+)")
+    def _notice_del(req, u, m, qs):
+        return d.delete_announcement(u, i(m))
+
+    @route("GET", r"/api/dms/duplicates")
+    def _dups(req, u, m, qs):
+        return d.duplicate_report(u)
+
+    @route("POST", r"/api/dms/suggest")
+    def _suggest(req, u, m, qs):
+        b = req.body(big())
+        return d.suggest(u, b.get("filename", ""), b64(b.get("content_b64")))
+
+    @route("GET", r"/api/dms/admin/connections")
+    def _conn_list(req, u, m, qs):
+        d._need_admin(u)
+        return app.connections.list()
+
+    @route("PUT", r"/api/dms/admin/connections/source")
+    def _conn_src(req, u, m, qs):
+        d._need_admin(u)
+        r = app.connections.save_source(req.body(16384))
+        d.store.log_audit(u.id, f"[저장소 연결 저장] {r['saved']}", [], False, "dms")
+        return r
+
+    @route("DELETE", r"/api/dms/admin/connections/source/([^/]+)")
+    def _conn_src_del(req, u, m, qs):
+        d._need_admin(u)
+        r = app.connections.delete_source(urllib.parse.unquote(m.group(1)))
+        d.store.log_audit(u.id, f"[저장소 연결 삭제] {r['deleted']}", [], False, "dms")
+        return r
+
+    @route("POST", r"/api/dms/admin/connections/source/test")
+    def _conn_src_test(req, u, m, qs):
+        d._need_admin(u)
+        return app.connections.test_source(req.body(16384))
+
+    @route("PUT", r"/api/dms/admin/connections/mail")
+    def _conn_mail(req, u, m, qs):
+        d._need_admin(u)
+        r = app.connections.save_mail(req.body(16384))
+        d.store.log_audit(u.id, f"[메일 계정 저장] {r['saved']}", [], False, "dms")
+        return r
+
+    @route("DELETE", r"/api/dms/admin/connections/mail/([^/]+)")
+    def _conn_mail_del(req, u, m, qs):
+        d._need_admin(u)
+        r = app.connections.delete_mail(urllib.parse.unquote(m.group(1)))
+        d.store.log_audit(u.id, f"[메일 계정 삭제] {r['deleted']}", [], False, "dms")
+        return r
+
+    @route("POST", r"/api/dms/admin/connections/mail/test")
+    def _conn_mail_test(req, u, m, qs):
+        d._need_admin(u)
+        return app.connections.test_mail(req.body(16384))
+
     @route("GET", r"/api/dms/admin/backups")
     def _backups(req, u, m, qs):
         d._need_admin(u)

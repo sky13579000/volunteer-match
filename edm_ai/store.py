@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS disposal_items(
 CREATE TABLE IF NOT EXISTS disposal_ledger(
   id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
   retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS announcements(
+  id INTEGER PRIMARY KEY, title TEXT, body TEXT DEFAULT '', pinned INTEGER DEFAULT 0, created_by TEXT, created TEXT, expires TEXT);
 CREATE TABLE IF NOT EXISTS backup_runs(
   id INTEGER PRIMARY KEY, ts TEXT, ok INTEGER, path TEXT, bytes INTEGER, files INTEGER, note TEXT, by TEXT);
 CREATE TABLE IF NOT EXISTS type_fields(code TEXT PRIMARY KEY, fields TEXT);
