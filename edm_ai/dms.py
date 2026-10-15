@@ -10,7 +10,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import automation
+from . import automation, crypt
 from .errors import DmsError
 from .ingest import SUPPORTED, read_file
 from .parsers import Unsupported
@@ -56,6 +56,13 @@ class DmsCore:
         self.trash_days = int(c.get("trash_days", 30))
         self.warn_days = int(c.get("expiry_warn_days", 30))
         self.share_cfg = {"enabled": False, "max_days": 30, "max_level": 1, **c.get("external_share", {})}
+        self._storage_key = None
+        sc = app.cfg.get("storage") or {}
+        if sc.get("encrypt"):
+            k = os.environ.get(sc.get("key_env", "EDM_AI_STORAGE_KEY"), "")
+            if len(k) < 16:
+                raise SystemExit(f"storage.encrypt 가 켜져 있지만 환경변수 {sc.get('key_env', 'EDM_AI_STORAGE_KEY')} (16자 이상)가 없습니다")
+            self._storage_key = k.encode()
         self._defer = 0
         self._dirty = False
         self._snap = None
@@ -412,7 +419,7 @@ class DmsCore:
             raise DmsError(400, "파일 경로가 올바르지 않습니다")
         fd, tmp = tempfile.mkstemp(dir=d, suffix=".part")
         with os.fdopen(fd, "wb") as f:
-            f.write(data)
+            f.write(crypt.seal(data, self._storage_key) if self._storage_key else data)
         os.replace(tmp, dest)
         return str(dest.relative_to(self.repo)), hashlib.sha256(data).hexdigest()
 
@@ -421,7 +428,7 @@ class DmsCore:
         if Path(name).suffix.lower() not in SUPPORTED:
             return Path(name).stem, ""
         try:
-            title, text = read_file(self.repo / rel)
+            title, text = self._read_plain(rel, name)
         except Unsupported:                      # no extractor / scanned / protected: keep the file, just without searchable text
             self._last_extract_note = "본문 미추출 (스캔·암호·미지원 형식)"
             return Path(name).stem, ""
@@ -430,8 +437,29 @@ class DmsCore:
         self._last_extract_note = ""
         return title, text[:MAX_TEXT_CACHE]
 
+    def _raw(self, rel: str) -> bytes:
+        blob = (self.repo / rel).read_bytes()
+        if crypt.is_sealed(blob):
+            if not self._storage_key:
+                raise DmsError(500, "암호화된 저장 파일이지만 저장소 키가 설정되지 않았습니다")
+            try:
+                return crypt.open_(blob, self._storage_key)
+            except ValueError as e:
+                raise DmsError(500, f"저장 파일을 복호화할 수 없습니다: {e}")
+        return blob
+
+    def _read_plain(self, rel: str, name: str):
+        with open(self.repo / rel, "rb") as f:
+            sealed = crypt.is_sealed(f.read(8))
+        if not sealed:
+            return read_file(self.repo / rel)
+        with tempfile.TemporaryDirectory() as t:                      # decrypt only for the moment of text extraction
+            tmp = Path(t) / ("f" + Path(name).suffix.lower())
+            tmp.write_bytes(self._raw(rel))
+            return read_file(tmp)
+
     def read_bytes(self, ver: dict) -> bytes:
-        data = (self.repo / ver["path"]).read_bytes()
+        data = self._raw(ver["path"])
         if hashlib.sha256(data).hexdigest() != ver["sha256"]:
             raise DmsError(500, "저장된 파일의 무결성 검사에 실패했습니다")
         return data

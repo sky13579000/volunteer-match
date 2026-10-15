@@ -126,6 +126,7 @@ def main(argv=None):
     su.add_argument("--prune", action="store_true", help="also remove users that are not in the source (admins are never removed)")
     sub.add_parser("llm-check", help="verify the configured LLM / embedding server (connectivity, citations, grounding)")
     sub.add_parser("verify-audit", help="check the audit hash chain")
+    sub.add_parser("encrypt-storage", help="encrypt already stored files with the storage key (storage.encrypt must be on; take a backup first)")
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8080)
@@ -178,6 +179,19 @@ def main(argv=None):
         from .backup import backup
         with app.lock:
             print(json.dumps(backup(app.store.db, app.dms.repo, Path(args.out))))
+        sys.exit(0)
+    if args.cmd == "encrypt-storage":
+        from . import crypt
+        dms, n = app.dms, 0
+        if not dms._storage_key:
+            sys.exit("storage.encrypt 를 켜고 키 환경변수를 설정하세요")
+        for f in sorted(dms.repo.rglob("*")):
+            if f.is_file() and not f.name.endswith(".part"):
+                raw = f.read_bytes()
+                if not crypt.is_sealed(raw):
+                    f.write_bytes(crypt.seal(raw, dms._storage_key))
+                    n += 1
+        print(json.dumps({"encrypted": n}))
         sys.exit(0)
     if args.cmd == "ingest":
         print(json.dumps(app.ingest()))

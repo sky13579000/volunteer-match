@@ -341,6 +341,8 @@ class DocsMixin:
             v = self._ver(row, ver)
             data, name = self.read_bytes(v), v["filename"]
         self.log(p, row, "downloaded", name)
+        if row["origin"] == "managed":
+            name, data = self.protect_download(p, row, name, data)
         sent_ver = ver if row["origin"] == "managed" else None
         if row["origin"] == "managed" and self._trace_cfg()["tag_downloads"]:
             from .dms_trace import tag_bytes
