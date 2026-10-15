@@ -14,9 +14,10 @@ from .dms_reports import ReportsMixin
 from .dms_search import SearchMixin
 from .dms_share import ShareMixin
 from .dms_system import SystemMixin
+from .dms_trace import TraceMixin
 from .dms_workflow import WorkflowMixin
 
 
-class Dms(DocsMixin, WorkflowMixin, LifecycleMixin, CollabMixin, SearchMixin, ShareMixin, BulkMixin, CalendarMixin, EditMixin, AccessMixin, SystemMixin, ReportsMixin, RecordsMixin, PrivacyMixin, KeysMixin, AdminMixin, DmsCore):
+class Dms(DocsMixin, WorkflowMixin, LifecycleMixin, CollabMixin, SearchMixin, ShareMixin, BulkMixin, CalendarMixin, EditMixin, AccessMixin, SystemMixin, ReportsMixin, RecordsMixin, PrivacyMixin, TraceMixin, KeysMixin, AdminMixin, DmsCore):
     """Document management service: folders, metadata, versions, approval, retention, collaboration,
     external sharing, bulk operations, search and administration - all permission-checked per call."""

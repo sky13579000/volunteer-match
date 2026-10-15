@@ -29,7 +29,7 @@ class ShareMixin:
     low-classification document; random token stored only as a hash; expiry mandatory; optional password with lockout;
     pinned to the effective version (a superseded / expired / deleted document stops being served); every access audited."""
 
-    def create_share(self, p, doc_id, days=7, max_downloads=0, password=None, perm="view", note="") -> dict:
+    def create_share(self, p, doc_id, days=7, max_downloads=0, password=None, perm="view", note="", latest=False) -> dict:
         if not self.share_cfg["enabled"]:
             raise DmsError(403, "외부 공유가 비활성화되어 있습니다 (설정 dms.external_share.enabled)")
         row = self.get_row(p, doc_id, "share")
@@ -54,14 +54,14 @@ class ShareMixin:
             salt = secrets.token_bytes(16)
             pwh = _pw(str(password), salt)
         token = secrets.token_urlsafe(32)
-        cur = self.x("INSERT INTO shares(doc_id,ver,token_hash,created_by,created,expires,max_dl,pw_salt,pw_hash,perm,note) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        cur = self.x("INSERT INTO shares(doc_id,ver,token_hash,created_by,created,expires,max_dl,pw_salt,pw_hash,perm,note,latest) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                      (doc_id, row["effective_ver"], _h(token), p.id, now(), add_days(now(), days), maxdl,
-                      salt.hex() if salt else None, pwh, perm, str(note)[:200]))
+                      salt.hex() if salt else None, pwh, perm, str(note)[:200], int(bool(latest))))
         self.log(p, row, "share_created", f"#{cur.lastrowid} {perm} {days}d" + (" pw" if pwh else ""))
         return {"id": cur.lastrowid, "token": token, "path": f"/s/{token}", "expires": add_days(now(), days), "perm": perm,
                 "password": bool(pwh), "note": "이 링크는 지금만 표시됩니다. 서버에는 해시만 저장됩니다."}
 
-    def send_share_mail(self, p, doc_id, to, message="", days=7, max_downloads=0, password=None, perm="view", password_mode="show") -> dict:
+    def send_share_mail(self, p, doc_id, to, message="", days=7, max_downloads=0, password=None, perm="view", password_mode="show", latest=False) -> dict:
         """Share a document BY LINK instead of attaching it: one link per recipient (so opens/downloads are tracked per person),
         revocable and expiring; the file itself never leaves the platform in the mail."""
         mailer = self.app.mailer
@@ -76,7 +76,7 @@ class ShareMixin:
         row = self.get_row(p, doc_id, "share")
         out = []
         for r in dict.fromkeys(rcpt):
-            sh = self.create_share(p, doc_id, days, max_downloads, password, perm, note=r)
+            sh = self.create_share(p, doc_id, days, max_downloads, password, perm, note=r, latest=latest)
             url = f"{base}/s/{sh['token']}"
             mailer.enqueue(mailer.build_share(r, p.name, row["doc_no"], row["title"] if self.app.cfg.get("notify", {}).get("smtp", {}).get("include_title", True) else "", url, sh["expires"], message, bool(password)))
             if password and password_mode == "mail":
@@ -91,7 +91,7 @@ class ShareMixin:
         t = now()
         return [{"id": s["id"], "created_by": s["created_by"], "created": s["created"], "expires": s["expires"], "perm": s["perm"],
                  "max_downloads": s["max_dl"], "downloads": s["dl_count"], "views": s["views"], "revoked": bool(s["revoked"]),
-                 "expired": s["expires"] < t, "has_password": bool(s["pw_hash"]), "note": s["note"], "ver": s["ver"]}
+                 "latest": bool(s.get("latest")), "expired": s["expires"] < t, "has_password": bool(s["pw_hash"]), "note": s["note"], "ver": s["ver"]}
                 for s in self.q("SELECT * FROM shares WHERE doc_id=? ORDER BY id DESC", (doc_id,))]
 
     def revoke_share(self, p, doc_id, share_id) -> dict:
@@ -109,6 +109,8 @@ class ShareMixin:
         if not s or s["revoked"] or s["expires"] < now():
             raise DmsError(404, GENERIC)
         row = self.row(s["doc_id"])
+        if row and s.get("latest") and row["effective_ver"]:
+            s = {**s, "ver": row["effective_ver"]}                       # "always the newest approved version" link
         if not row or row["deleted_at"] or row["status"] == "expired" or row["effective_ver"] != s["ver"] or row["legal_hold"] and False:
             raise DmsError(404, GENERIC)                       # same message for every failure: no oracle
         return s, row

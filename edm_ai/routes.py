@@ -321,7 +321,7 @@ def build_routes(app):
     @route("POST", r"/api/docs/(\d+)/shares")
     def _share(req, u, m, qs):
         b = req.body(8192)
-        return d.create_share(u, i(m), b.get("days", 7), b.get("max_downloads", 0), b.get("password") or None, b.get("perm", "view"), b.get("note", ""))
+        return d.create_share(u, i(m), b.get("days", 7), b.get("max_downloads", 0), b.get("password") or None, b.get("perm", "view"), b.get("note", ""), bool(b.get("latest")))
 
     @route("DELETE", r"/api/docs/(\d+)/shares/(\d+)")
     def _unshare(req, u, m, qs):
@@ -487,10 +487,23 @@ def build_routes(app):
             raise DmsError(404, "저장소를 찾을 수 없습니다")
         return {"items": app.sources.items(name, q1(qs, "status"))}
 
+    @route("POST", r"/api/dms/verify-copy")
+    def _verify_copy(req, u, m, qs):
+        b = req.body(big())
+        return d.verify_copy(u, b64(b.get("content_b64")) if b.get("content_b64") else None, b.get("sha256"), str(b.get("filename") or ""))
+
+    @route("GET", r"/api/docs/(\d+)/activity")
+    def _activity(req, u, m, qs):
+        return d.doc_activity(u, i(m))
+
+    @route("GET", r"/api/docs/(\d+)/activity\.csv")
+    def _activity_csv(req, u, m, qs):
+        return Raw(d.activity_csv(u, i(m)).encode("utf-8"), "activity.csv", "text/csv")
+
     @route("POST", r"/api/docs/(\d+)/send-link")
     def _send_link(req, u, m, qs):
         b = req.body(16384)
-        return d.send_share_mail(u, i(m), b.get("to"), b.get("message", ""), b.get("days", 7), b.get("max_downloads", 0), b.get("password") or None, b.get("perm", "view"), b.get("password_mode", "show"))
+        return d.send_share_mail(u, i(m), b.get("to"), b.get("message", ""), b.get("days", 7), b.get("max_downloads", 0), b.get("password") or None, b.get("perm", "view"), b.get("password_mode", "show"), bool(b.get("latest")))
 
     @route("GET", r"/api/dms/admin/mail")
     def _mail(req, u, m, qs):

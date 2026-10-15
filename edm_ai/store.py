@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS disposal_items(
 CREATE TABLE IF NOT EXISTS disposal_ledger(
   id INTEGER PRIMARY KEY, disposal_id INTEGER, doc_no TEXT, title TEXT, class_code TEXT, folder TEXT, owner TEXT,
   retention_until TEXT, versions INTEGER, sha256 TEXT, disposed_at TEXT, requested_by TEXT, approved_by TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS doc_activity(
+  id INTEGER PRIMARY KEY, doc_id INTEGER, user_id TEXT, action TEXT, ver INTEGER, out_sha TEXT, ts TEXT);
+CREATE INDEX IF NOT EXISTS ix_act_doc ON doc_activity(doc_id, id);
+CREATE INDEX IF NOT EXISTS ix_act_sha ON doc_activity(out_sha);
 CREATE TABLE IF NOT EXISTS pii_registry(
   id INTEGER PRIMARY KEY, name TEXT, purpose TEXT, legal_basis TEXT DEFAULT '', items TEXT DEFAULT '', subjects TEXT DEFAULT '', retention TEXT DEFAULT '',
   third_party TEXT DEFAULT '', outsourced TEXT DEFAULT '', manager TEXT DEFAULT '', location TEXT DEFAULT '', destroy_by TEXT, folder_id INTEGER,
@@ -165,11 +169,11 @@ class DocumentStore:
         if dcols and "class_code" not in dcols:
             with self.db:
                 self.db.execute("ALTER TABLE dms_docs ADD COLUMN class_code TEXT")
-        for tbl, col in (("disposals", "method"), ("disposal_ledger", "method")):
+        for tbl, col, typ in (("disposals", "method", "TEXT DEFAULT 'delete'"), ("disposal_ledger", "method", "TEXT DEFAULT 'delete'"), ("shares", "latest", "INTEGER DEFAULT 0")):
             tc = {r[1] for r in self.db.execute(f"PRAGMA table_info({tbl})")}
             if tc and col not in tc:
                 with self.db:
-                    self.db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT DEFAULT 'delete'")
+                    self.db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {typ}")
         fcols = {r[1] for r in self.db.execute("PRAGMA table_info(folders)")}
         if fcols and "open_create" not in fcols:
             with self.db:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import mimetypes
 from pathlib import Path
@@ -340,6 +341,11 @@ class DocsMixin:
             v = self._ver(row, ver)
             data, name = self.read_bytes(v), v["filename"]
         self.log(p, row, "downloaded", name)
+        sent_ver = ver if row["origin"] == "managed" else None
+        if row["origin"] == "managed" and self._trace_cfg()["tag_downloads"]:
+            from .dms_trace import tag_bytes
+            data = tag_bytes(name, data, row["doc_no"], sent_ver)
+        self.track(p, row, "download", sent_ver, hashlib.sha256(data).hexdigest() if row["origin"] == "managed" else None)
         return name, data, mimetypes.guess_type(name)[0] or "application/octet-stream"
 
     def diff(self, p, doc_id, a, b) -> dict:
@@ -502,6 +508,7 @@ class DocsMixin:
         d["class_name"], d["class_retention_years"] = (c["name"], c["retention_years"]) if c else (None, None)
         d["privacy"] = self.privacy_of(p, row)
         self.x("INSERT OR REPLACE INTO recent VALUES(?,?,?)", (p.id, doc_id, now()))
+        self.track(p, row, "view", vv)
         return d
 
 

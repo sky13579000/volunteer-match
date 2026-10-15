@@ -3,7 +3,7 @@ import { folderOptions } from "./v-docs.js";
 import { requestDialog } from "./v-social.js";
 import { icon } from "./icons.js";
 
-const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["history", "이력"]];
+const TABS = [["info", "개요"], ["ask", "AI 질문"], ["versions", "버전"], ["approval", "결재"], ["comments", "댓글"], ["acl", "권한"], ["share", "외부 공유"], ["activity", "열람 현황"], ["history", "이력"]];
 const ACTION = { registered: "등록", new_version: "새 버전", restored: "버전 복원", submitted: "결재 요청", approved_step: "결재 승인", rejected: "반려", delegated: "결재 위임",
   workflow_cancelled: "결재 회수", checked_out: "체크아웃", checkout_cancelled: "체크아웃 해제", downloaded: "다운로드", acl_changed: "권한 변경", access_requested: "권한 신청", access_granted: "권한 승인", access_denied: "권한 거절", meta_changed: "정보 변경", moved: "이동",
   deleted: "삭제", restored_from_trash: "휴지통 복원", legal_hold_on: "법적 보류", legal_hold_off: "법적 보류 해제", expired: "만료", expiry_changed: "만료일 변경", commented: "댓글",
@@ -57,7 +57,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     return;
   }
   const alerts = d.analysis?.findings || [];
-  const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, history: historyTab }[tab] || infoTab;
+  const body = { info: infoTab, ask: askTab, versions: versionsTab, approval: approvalTab, comments: commentsTab, acl: aclTab, share: shareTab, activity: activityTab, history: historyTab }[tab] || infoTab;
   const panel = el("div", { role: "tabpanel" });
   const priv = d.privacy?.findings?.length ? el("div", { class: "card privacy-banner sec" }, icon("shield", 20), el("div", {}, el("b", {}, "개인정보가 포함된 것으로 검출되었습니다"),
     el("div", { class: "chips" }, d.privacy.findings.map((f) => pill(`${f.label} ${f.count}건`, f.severity === "high" ? "bad" : f.severity === "medium" ? "warn" : ""))),
@@ -71,7 +71,7 @@ route(/^\/doc\/(\d+)$/, async (view, m, params) => {
     } }, icon("eye", 14), "원문 보기 (사유 필수)"))) : "";
   view.replaceChildren(head, priv,
     alerts.length ? el("div", { class: "card sec" }, el("b", { class: "bad" }, `업무 DB와 불일치 ${alerts.length}건`), alerts.map((f) => el("p", { class: "flush" }, pill(f.severity === "high" ? "높음" : "중간", f.severity === "high" ? "bad" : "warn"), " " + f.message))) : "",
-    el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share"))
+    el("div", { class: "tabs", role: "tablist" }, TABS.filter(([t]) => t !== "acl" || can("acl") || d.origin === "crawled" && can("manage")).filter(([t]) => t !== "share" || can("share")).filter(([t]) => t !== "activity" || can("edit"))
       .map(([t, l]) => el("button", { role: "tab", "aria-selected": String(t === tab), onclick: () => goTab(t) }, l + (t === "comments" && d.comment_count ? ` (${d.comment_count})` : "")))),
     panel);
   panel.append(await body(d, reload));
@@ -277,13 +277,13 @@ async function shareTab(d, reload) {
   const shares = await api(`/api/docs/${d.id}/shares`);
   const days = el("input", { type: "number", id: "sh-days", min: "1", max: String(state.meta.share.max_days), value: "7" }), maxdl = el("input", { type: "number", id: "sh-max", min: "0", value: "0" });
   const pw = el("input", { type: "password", id: "sh-pw", autocomplete: "new-password", placeholder: "선택 (6자 이상)" }), perm = el("select", { id: "sh-perm" }, [["view", "보기만"], ["download", "다운로드 허용"]].map(([v, l]) => el("option", { value: v }, l)));
-  const note = el("input", { id: "sh-note", placeholder: "메모 (선택)" });
+  const note = el("input", { id: "sh-note", placeholder: "메모 (선택)" }), latest = el("input", { type: "checkbox", id: "sh-latest" });
   return el("div", { class: "stack" },
     el("p", { class: "hint" }, `로그인 없이 열 수 있는 링크입니다. 승인(게시)된 현행 버전만, 보안등급 L${state.meta.share.max_level} 이하 문서만 공유할 수 있고 새 버전이 승인되면 링크는 자동으로 닫힙니다. 개인정보는 가려서 보여 줍니다.`),
-    el("div", { class: "card" }, el("div", { class: "grid2" }, field("유효 기간(일)", days), field("최대 다운로드 (0=무제한)", maxdl), field("권한", perm), field("비밀번호", pw)), field("메모", note),
+    el("div", { class: "card" }, el("div", { class: "grid2" }, field("유효 기간(일)", days), field("최대 다운로드 (0=무제한)", maxdl), field("권한", perm), field("비밀번호", pw)), field("메모", note), el("label", { class: "inline" }, latest, "항상 최신본으로 연결 (새 버전이 승인되면 같은 링크가 최신 내용을 보여줌)"),
       el("div", { class: "row end sec" }, el("button", { class: "primary", id: "sh-create", onclick: async () => {
         try {
-          const r = await api(`/api/docs/${d.id}/shares`, { method: "POST", body: { days: Number(days.value), max_downloads: Number(maxdl.value), password: pw.value || null, perm: perm.value, note: note.value } });
+          const r = await api(`/api/docs/${d.id}/shares`, { method: "POST", body: { days: Number(days.value), max_downloads: Number(maxdl.value), password: pw.value || null, perm: perm.value, note: note.value, latest: latest.checked } });
           const url = location.origin + r.path;
           await dialog("공유 링크가 만들어졌습니다", () => el("div", {}, el("p", { class: "bad" }, "이 링크는 지금 한 번만 표시됩니다. 서버에는 해시만 저장됩니다."),
             el("input", { id: "sh-url", readonly: true, value: url, onfocus: (e) => e.target.select() }), el("p", { class: "hint" }, `유효기간 ${fmtDay(r.expires)} · ${r.perm === "download" ? "다운로드 허용" : "보기만"}${r.password ? " · 비밀번호 필요" : ""}`)),
@@ -295,16 +295,24 @@ async function shareTab(d, reload) {
         const ok = await dialog("메일로 링크 보내기", () => el("div", { class: "stack" }, el("p", { class: "hint" }, "파일은 첨부하지 않고, 받는 사람마다 별도의 링크를 보냅니다. 위의 유효 기간·권한·비밀번호 설정이 적용됩니다."), field("받는 사람 (쉼표로 구분)", to), field("메시지", msg)),
           [{ label: "취소", value: false }, { label: "보내기", primary: true, run: async () => {
             try {
-              const r = await api(`/api/docs/${d.id}/send-link`, { method: "POST", body: { to: to.value.split(/[,;\s]+/).filter(Boolean), message: msg.value, days: Number(days.value), max_downloads: Number(maxdl.value), password: pw.value || null, perm: perm.value } });
+              const r = await api(`/api/docs/${d.id}/send-link`, { method: "POST", body: { to: to.value.split(/[,;\s]+/).filter(Boolean), message: msg.value, days: Number(days.value), max_downloads: Number(maxdl.value), password: pw.value || null, perm: perm.value, latest: latest.checked } });
               toast(`${r.sent.length}명에게 보냈습니다`); return true;
             } catch (e) { fail(e); return false; } } }]);
         if (ok) reload();
       } }, icon("send", 16), "메일로 보내기"))),
-    shares.length ? table(["#", "만든 사람", "만든 날", "만료", "권한", "열람", "다운로드", "상태", ""], shares.map((s) => [s.id, userName(s.created_by), fmtDay(s.created), fmtDay(s.expires), s.perm === "download" ? "다운로드" : "보기", s.views,
+    shares.length ? table(["#", "만든 사람", "만든 날", "만료", "권한", "열람", "다운로드", "상태", ""], shares.map((s) => [s.id, userName(s.created_by), fmtDay(s.created), fmtDay(s.expires), (s.perm === "download" ? "다운로드" : "보기") + (s.latest ? " · 최신본" : ""), s.views,
       `${s.downloads}${s.max_downloads ? " / " + s.max_downloads : ""}`, s.revoked ? pill("폐지", "bad") : s.expired ? pill("만료") : pill(s.has_password ? "사용 중 (비밀번호)" : "사용 중", "ok"),
       !s.revoked && !s.expired ? el("button", { class: "sm danger", onclick: async () => { await api(`/api/docs/${d.id}/shares/${s.id}`, { method: "DELETE" }); toast("폐지했습니다"); reload(); } }, "폐지") : ""])) : empty("만든 링크가 없습니다"));
 }
 
 function historyTab(d) {
   return d.history.length ? table(["일시", "사용자", "작업", "내용"], d.history.map((h) => [fmtDate(h.ts), userName(h.user.replace(/^share:/, "외부 공유 #")), ACTION[h.action] || h.action, h.detail])) : empty("이력이 없습니다");
+}
+
+async function activityTab(d) {
+  const a = await api(`/api/docs/${d.id}/activity`);
+  return el("div", { class: "stack" }, el("div", { class: "row" }, pill(`열람 ${a.totals.views}`, "info"), pill(`다운로드 ${a.totals.downloads}`), el("span", { class: "grow" }),
+    el("button", { onclick: () => saveBlob(`/api/docs/${d.id}/activity.csv`, {}, `activity-${d.doc_no}.csv`) }, icon("download", 16), "CSV")),
+  el("div", { class: "card" }, a.users.length ? table(["사용자", "열람", "다운로드", "마지막 접근"], a.users.map((u) => [a.names[u.user] || u.user, u.views, u.downloads, fmtDate(u.last)])) : empty("아직 열람 기록이 없습니다", "eye")),
+  el("p", { class: "hint" }, "같은 사용자의 열람은 10분에 한 번만 기록됩니다. 외부 공유 링크의 열람·다운로드는 '외부 공유' 탭과 이력에 따로 남습니다. 설정 tracing.log_views 로 끌 수 있습니다."));
 }

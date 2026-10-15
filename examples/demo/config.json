@@ -269,6 +269,10 @@
   "disposal": {
     "allow_self_approval": false
   },
+  "tracing": {
+    "log_views": true,
+    "tag_downloads": true
+  },
   "sources": [
     {
       "name": "본부NAS",

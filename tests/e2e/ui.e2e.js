@@ -310,6 +310,10 @@ const EXPECTED_HTTP = /Failed to load resource: the server responded with a stat
   await ad2.hash('#/records?tab=unmask'); await ad2.waitForSelector('#view .card');
   ok('unmask log tab renders', (await ad2.textContent('#view')).includes('원문 보기'));
 
+  await kim.hash('#/verify'); await kim.waitForSelector('#verify-file');
+  await kim.setInputFiles('#verify-file', FILES + '/contract.md'); await kim.click('#verify-go'); await kim.waitForSelector('#verify-out .card');
+  ok('copy check finds the uploaded contract among the versions', !(await kim.textContent('#verify-out')).includes('찾을 수 없습니다') && (await kim.textContent('#verify-out')).includes('계약 초안'));
+
   // ===== integrations: API keys =====
   await ad2.hash('#/admin/integrations'); await ad2.waitForSelector('#k-new');
   await ad2.click('#k-new'); await ad2.locator('dialog #k-name').fill('e2e 시험 연동'); await ad2.dlg().getByRole('button', { name: '발급' }).click(); await ad2.waitForSelector('#key-once');
