@@ -1,7 +1,7 @@
 """Sends one signed 'approval finished' message to the platform - for testing a groupware integration end to end,
 or as the body of a small relay service when the groupware cannot sign requests itself.
 
-    EDM_AI_GW_SECRET=<same secret as the server> python3 send_example.py http://127.0.0.1:9100 file.pdf kim@iccjeju.example
+    EDM_AI_GW_SECRET=<same secret as the server> python3 send_example.py http://127.0.0.1:9101 file.pdf kim@iccjeju.example
 """
 import base64
 import hashlib

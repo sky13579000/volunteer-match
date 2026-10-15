@@ -106,7 +106,7 @@ def main(argv=None):
     ap.add_argument("-c", "--config", help="config.json (not needed for `demo`)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("demo", help="build the sample data and start the web UI (needs a repo checkout)")
-    d.add_argument("--port", type=int, default=9100, help="first port to try (the next free one is used if it is busy)")
+    d.add_argument("--port", type=int, default=9101, help="first port to try (the next free one is used if it is busy)")
     d.add_argument("--host", default="127.0.0.1")
     d.add_argument("--no-browser", action="store_true")
     d.add_argument("--lan", action="store_true", help="listen on all interfaces so other PCs on the same network can open it (demo login has NO password: trusted network only)")
