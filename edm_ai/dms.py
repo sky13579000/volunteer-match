@@ -13,6 +13,7 @@ from pathlib import Path
 from . import automation
 from .errors import DmsError
 from .ingest import SUPPORTED, read_file
+from .parsers import Unsupported
 from .models import Acl
 from .safety import redact_pii
 from .events import EVENT_OF_ACTION
@@ -421,8 +422,12 @@ class DmsCore:
             return Path(name).stem, ""
         try:
             title, text = read_file(self.repo / rel)
-        except Exception as e:                   # corrupt / unsupported content
+        except Unsupported:                      # no extractor / scanned / protected: keep the file, just without searchable text
+            self._last_extract_note = "본문 미추출 (스캔·암호·미지원 형식)"
+            return Path(name).stem, ""
+        except Exception as e:                   # corrupt content
             raise DmsError(422, f"문서를 읽을 수 없습니다: {e}")
+        self._last_extract_note = ""
         return title, text[:MAX_TEXT_CACHE]
 
     def read_bytes(self, ver: dict) -> bytes:

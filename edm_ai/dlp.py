@@ -77,3 +77,46 @@ def describe(findings: dict[str, int]) -> list[dict]:
 
 def summary(findings: dict[str, int], kinds=None) -> str:
     return ", ".join(f"{LABEL[k]} {n}건" for k, n in findings.items() if kinds is None or k in kinds)
+
+
+# ---------------- masking ----------------
+def _mask_rrn(m):
+    return f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}{m.group(5)}******"
+
+
+def mask(text: str, kinds=None) -> str:
+    """Replace detected identifiers with a masked form that keeps the shape (900101-1******, 010-****-5678, k***@host).
+    Uses the same validity rules as scan(), so ordinary numbers are left alone."""
+    want = set(kinds) if kinds else set(LABEL)
+    t = text or ""
+    spans = []                                                      # (start, end, replacement)
+    if want & {"rrn", "alien"}:
+        for m in _RRN.finditer(t):
+            yy, mm, dd, sep, g, rest = m.groups()
+            if _valid_birth(yy, mm, dd, g) and (sep or _rrn_checksum(yy + mm + dd + g + rest)) and ("alien" if g in "5678" else "rrn") in want:
+                spans.append((m.start(), m.end(), _mask_rrn(m)))
+    if "card" in want:
+        for m in _CARD.finditer(t):
+            digits = re.sub(r"\D", "", m.group())
+            if 13 <= len(digits) <= 19 and luhn_ok(digits) and not _RRN.fullmatch(m.group()):
+                spans.append((m.start(), m.end(), re.sub(r"\d", "*", m.group()[:-4]) + m.group()[-4:]))
+    if "phone" in want:
+        for m in _PHONE.finditer(t):
+            g = m.group()
+            spans.append((m.start(), m.end(), re.sub(r"\d(?=[-. ]?\d{4}$)", "*", g) if False else re.sub(r"(?<=\d)\d(?=\d*[-. ]?\d{4}$)", "*", g)))
+    if "email" in want:
+        for m in _EMAIL.finditer(t):
+            local, _, host = m.group().partition("@")
+            spans.append((m.start(), m.end(), local[:1] + "***@" + host))
+    if "passport" in want:
+        for m in _PASSPORT.finditer(t):
+            spans.append((m.start(), m.end(), m.group()[0] + "********"))
+    out, pos = [], 0
+    for a, b, r in sorted(spans):
+        if a < pos:
+            continue
+        out.append(t[pos:a])
+        out.append(r)
+        pos = b
+    out.append(t[pos:])
+    return "".join(out)
